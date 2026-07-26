@@ -140,6 +140,28 @@ range is accounted for.
 | `03-AP-25-09-25-Parsing.pdf` | 1 | title slide |
 | | 29–31, 33–35 | animation build-up frames of the predictive-parse trace; frames 4 and 8 (pp.32, 36) are reproduced and the range is cited as pp.29–36 in [ch.03 §3.1](notes/03-top-down-parsing.md) |
 | | 63 | "Conclusions…" — the slide has no content |
+| `07-AP25-10-06-RUST-1.pdf` | 1–2 | title and outline slides |
+| `08-AP25-10-08-RUST-2.pdf` | 1–2 | title and outline slides |
+| | 3 | marked RECAP on the slide — repeats the ownership rules of R1 p.20 |
+| | 18 | System Traits, superseded by the fuller version on R3 p.3 (which adds "requires `Clone`" to `Copy`) |
+| `09-AP25-10-13-RUST-3.pdf` | 1–2 | title and outline slides |
+| `10-AP25-10-15-Python_and_GIL.pdf` | 1 | title slide |
+| | 7 | "Concurrency in Python…" — section divider, no content |
+| `15-AP25-10-27-Types-Polymorphism.pdf` | 1 | title slide |
+| `16-AP25-JavaGenerics.pdf` | 1 | title slide |
+| `17-AP25-Haskell-TypeClasses.pdf` | 1–2 | title slide and "Core Haskell" outline |
+| | 51, 53, 58, 60 | animation build-up frames of the appendix parse-tree examples; the informative frames of each sequence are reproduced |
+| `21-AP25-Monads.pdf` | 1 | title slide |
+| | 26 | "Contaminating Haskell with side effects" — section divider, no content |
+| `24-AP25-JLambdas.pdf` | 1 | title slide |
+| | 41 | "MONADS IN JAVA…." — section divider, no content |
+| `25-AP25-Reflection_Annotations_in_Java.pdf` | 1 | title slide |
+| | 42 | "ANNOTATIONS IN JAVA" — section divider, no content |
+| `26-AP25-Python-Decorators-OOP.pdf` | 1 | title slide |
+
+Every other page of every deck is cited by a chapter. The `DOCS/` textbook chapters
+are supporting material and are cited by section rather than exhaustively; ch.04 is
+explicitly a brief selection from three of them (84 pages), not full coverage.
 
 ## Gap register
 

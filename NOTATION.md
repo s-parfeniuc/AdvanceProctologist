@@ -202,11 +202,13 @@ Spell it **"Ad hoc"** (two words, as the slide), not "ad-hoc".
 *Sources: `16-AP25-JavaGenerics.pdf`, `24-AP25-JLambdas.pdf`,
 `25-AP25-Reflection_Annotations_in_Java.pdf`. Decks 16 and 25 carry fault **C**.*
 
-- **Subtyping is stated in prose, not in symbols.** The Generics deck writes
-  "Integer is subtype of Number" and "`List<Number>` is neither a supertype nor
-  a subtype of `List<Integer>`" [Generics pp.166–209 of `build/text`]. It never
-  uses `<:`. Do not introduce `<:` — Mitchell's symbolic form may appear only in
-  a labelled aside.
+- **Subtyping: `S <: T`, glossed on first use.** The Types deck introduces the
+  symbol explicitly — "methods/functions with a formal parameter of type **T**
+  accept an actual parameter of type **S <: T** (**S** subtype of **T**)"
+  [Types p.20]. The Generics deck then works in prose instead ("Integer is
+  subtype of Number", "`List<Number>` is neither a supertype nor a subtype of
+  `List<Integer>`"). Use `<:` where a relation is being stated compactly and
+  prose where the deck reasons in prose; both are the lecture's own usage.
 - Variance vocabulary is **covariant / contravariant / invariant**, with the
   deck's safety rules: "covariance is safe if the type is read-only",
   "contravariance is safe if the type is write-only".

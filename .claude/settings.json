@@ -19,7 +19,8 @@
       "Bash(./scripts/check-notation.sh NOTATION.md SOURCES.md)",
       "Bash(./scripts/check-notation.sh /tmp/claude-1000/-home-sebastian-ADVANCED-theory/fa6ca945-ded1-4019-84f7-9cfed45f463e/scratchpad/t.md)",
       "Bash(echo \"=== exit: $? \\(0 = marker honoured\\) ===\")",
-      "Bash(./scripts/check-notation.sh)"
+      "Bash(./scripts/check-notation.sh)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }
