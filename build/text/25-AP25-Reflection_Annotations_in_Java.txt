@@ -1,0 +1,860 @@
+301AA - Advanced Programming
+
+  Lecturer: Andrea Corradini
+        andrea.corradini@unipi.it
+    http://pages.di.unipi.it/corradini/
+
+
+
+   AP-25: Reﬂec'on and Annota'ons in Java
+                        Overview
+• Reﬂec%on in Programming Languages: pros &
+  cons
+• Run%me Reﬂec%on in Java
+  – Class objects
+  – Retrieving members of a class
+  – Invoking methods and constructors, accessing ﬁelds
+  – Accessibility
+• Annota%ons in Java
+èJava Tutorials on Reﬂec%on & Annota%on:
+  èh"ps://docs.oracle.com/javase/tutorial/reﬂect/index.html
+  èh"ps://docs.oracle.com/javase/tutorial/java/annota6ons/index.html
+                                                                       2
+                    Reﬂec7on
+• Reflection: ability of a program to manipulate as data
+   something representing the state of the program during its
+   own execution.
+Kinds of reflection:
+• Introspection is the ability of a program to observe and
+   therefore reason about its own state
+• Intercession is the ability for a program to modify its own
+   execution state or alter its own interpretation or meaning
+• Both aspects require a mechanism for encoding execution
+   state as data: providing such an encoding is called
+   reification.
+
+
+                                                            3
+Reflection and Reification
+
+
+
+
+© Oscar Nierstrasz               7
+
+
+
+                             4
+Structural and behavioral reﬂec7on
+• Structural reﬂec+on is concerned with the ability of
+  the language to provide a complete reiﬁca'on of
+  both
+   – the program currently executed
+   – its abstract data types.
+• Behavioral reﬂec+on is concerned with the ability of
+  the language to provide a complete reiﬁca8on of
+   – its own seman'cs and implementa'on (processor)
+   – the data and implementa?on of the run-'me system.
+
+
+                                                         5
+        LISP-style reflection &
+  metaprogramming (metacircularity)
+• Homoiconicity: code is data (S-expressions) →
+  programs can easily manipulate other programs.
+• Metacircular interpreter: implement `eval` in the
+  language itself; the language can describe and extend
+  itself.
+• Macros (`defmacro`): source-to-source transformaAons
+  at expansion Ame
+   – Deﬁne new syntac?c constructs/DSLs by rewri?ng the AST
+     before evalua?on
+• REPL + `eval`: execute generated code at runAme;
+  experimentaAon and meta-level tooling become trivial.
+
+                                                              6
+        LISP-style reflection &
+  metaprogramming (metacircularity)
+;; A tiny taste: defining new syntax via macros
+(defmacro unless (cond &body body)
+  `(if (not ,cond)
+       (progn ,@body)))
+
+;; Metacircular flavor (highly simplified):
+(defun my-eval (expr env)
+  (cond ((atom expr) (lookup expr env))
+        ((eq (car expr) 'quote) (cadr expr))
+        ((eq (car expr) 'if)
+         (if (my-eval (cadr expr) env)
+             (my-eval (caddr expr) env)
+             (my-eval (cadddr expr) env)))
+        (t (apply (my-eval (car expr) env)
+                  (mapcar (lambda (e) (my-eval e env)) (cdr expr))))))
+
+
+
+
+                                                                         7
+       Rela;on to run;me reﬂec;on in
+             modern languages
+•   What run)me reﬂec)on usually means (Java/.NET)
+     – Inspect metadata: types, ﬁelds, methods, a3ributes/annota9ons
+     – Invoke by name, create instances dynamically; not code-as-data
+•   Metaprogramming spectrum
+     – Compile-9me macros (Lisp/Clojure, Rust proc-macros, Template Haskell, Scala
+       3)
+     – Run9me reﬂec9on (Java/.NET, Python introspec9on)
+     – Code genera9on (source/IL/bytecode) and eval in dynamic languages
+•   Trade-oﬀs
+     – Safety: macros fail at compile-9me; reﬂec9on errors surface at run9me
+     – Performance: macros are zero-cost; reﬂec9on has invoca9on overhead/AOT
+       trimming concerns
+     – Expressiveness: homoiconicity enables AST-level rewrites and new syntax;
+       reﬂec9on exposes only run9me metadata
+•   When to use which
+     – Macros: DSLs, boilerplate elimina9on, domain invariants
+     – Reﬂec9on: plugin systems, late binding, dynamic loading, serializa9on of
+       unknown types
+                                                                                     8
+               Uses of Reﬂec7on
+• Class Browsers
+  need to be able to enumerate the members of classes
+• Visual Development Environments
+  can exploit type information available in reflection to aid
+  the developer in writing correct code.
+• Debuggers
+  need to be able to examine private members on classes
+• Test Tools
+  can make use of reflection to ensure a high level of code
+  coverage in a test suite
+• Extensibility Features
+  An application may make use of external, user-defined
+  classes by creating instances of extensibility objects
+
+                                                                9
+            Drawbacks of Reflection
+If it is possible to perform an opera)on without using reﬂec)on, then it is
+preferable to avoid using it, because Reﬂec)on brings:
+• Performance Overhead
+     Reﬂec)on involves types that are dynamically resolved, thus op)miza)ons
+     can not be performed, and reﬂec)ve opera)ons have slower performance
+     than their non-reﬂec)ve counterparts.
+• Security Restric6ons
+     Reﬂec)on requires a run)me permission which may not be present when
+     running under a security manager. This aﬀects code which has to run in a
+     restricted security context.
+• Exposure of Internals
+     Reﬂec)ve code may access internals (like private ﬁelds), thus it breaks
+     abstrac)ons and may change behavior with upgrades of the plaNorm,
+     destroying portability.
+
+                                                                           10
+               Reﬂec7on in Java
+• Java supports introspection and reflexive invocation,
+  but not code modification.
+• For every type (primitive, loaded or synthesized), the
+  JVM maintains an associated object of class
+  java.lang.Class
+• This object “reflects” the type it represents
+• It is the “entry point” for reflection. All relevant
+  information about the type can be obtained from it:
+   – Class name & modifiers
+   – Superclass & Interfaces implemented
+   – Methods, fields, constructors, etc.
+• API: java.lang.reflect
+                                                           11
+The Reflection Logical Hierarchy in Java
+
+
+ Object                Class
+
+
+
+ compiled                         Field
+   class
+    file                        Method
+
+                               Constructor
+
+                                 Member
+                                             12
+        Retrieving Class Objects
+• Use method    Object.getClass()
+• Examples:
+  – Class c = "foo".getClass(); // String
+  – byte[] bytes = new byte[1024];
+    Class c = bytes.getClass(); //byte array
+  – Set<String> s = new HashSet<String>();
+    Class c = s.getClass(); // HashSet
+• Use field .class of a type (also primitive)
+  – Class c = String.class;
+  – Class c = boolean.class;
+  – Class c = int[][][].class;
+
+                                                13
+     Retrieving Class Objects (2)
+• Use method Class.forName(String)
+• Examples:
+  – Class c = Class.forName("java.util.List”);
+  – Class c = Class.forName("[D"); // double[]
+  – Class c = Class.forName("[[Ljava.lang.String;");
+
+
+
+
+                                                   14
+                         Class object
+
+
+
+
+• Instances of the class Class represent classes and interfaces in a running Java
+  application.
+• Class objects are constructed automatically by the JVM as classes are loaded
+• They provide access to the information read from the class file
+                                                                                    15
+                     Class file structure
+ClassFile {
+      u4 magic;                                                        0xCAFEBABE
+      u2 minor_version;                                      Java Language Version
+      u2 major_version;
+      u2 constant_pool_count;
+                                                                     Constant Pool
+      cp_info   contant_pool[constant_pool_count–1];
+      u2 access_ﬂags;                                access modiﬁers and other info
+      u2 this_class;                          References to Class and Superclass
+      u2 super_class;
+      u2 interfaces_count;
+                                                  References to Direct Interfaces
+      u2 interfaces[interfaces_count];
+      u2 ﬁelds_count;                                 Static and Instance Variables
+      ﬁeld_info ﬁelds[ﬁelds_count];
+      u2 methods_count;
+                                                                          Methods
+      method_info methods[methods_count];
+      u2 aBributes_count;
+                                                            Other Info on the Class
+      aBribute_info aBributes[aBributes_count];
+}
+
+
+                                                                                      16
+                      Inspecting a Class
+•   ASer we obtain a Class object myClass, we can:
+•   Get the class name
+     String s = myClass.getName() ;
+•   Get the class modiﬁers
+     int m = myClass.getModifiers() ;
+     bool isPublic = Modifier.isPublic(m) ;
+     bool isAbstract = Modifier.isAbstract(m) ;
+     bool isFinal = Modifier.isFinal(m) ;
+•   Test if it is an interface
+     bool isInterface = myClass.isInterface() ;
+•   Get the interfaces implemented by a class
+     Class [] itfs = myClass.getInterfaces() ;
+•   Get the superclass
+     Class super = myClass.getSuperClass() ;
+                                                     17
+     Discovering Class members
+• Fields, methods, and constructors
+• java.lang.reflect.* :
+  – Member interface
+  – Field class
+  – Method class
+  – Constructor class
+
+
+
+
+                                      19
+    Class Methods for Locating Members
+                                          List of   Inherited   Private
+Member        Class API                   members   members     members
+                                          ?         ?           ?
+              getDeclaredField(String)      no         no         yes
+              getField(String)              no         yes         no
+Field
+              getDeclaredFields()           yes        no         yes
+              getFields()                   yes        yes         no
+              getDeclaredMethod(…)          no         no         yes
+              getMethod(…)                  no         yes         no
+Method
+              getDeclaredMethods()          yes        no         yes
+              getMethods()                  yes        yes         no
+              getDeclaredConstructor(…)     no         N/A        yes
+              getConstructor(…)             no         N/A         no
+Constructor
+              getDeclaredConstructors()     yes        N/A        yes
+              getConstructors()             yes        N/A         no
+                                                                        20
+    Example: Class Methods for locating Methods
+
+•   getDeclaredMethod(String name, Class<?>... parameterTypes): Returns a
+    Method object corresponding to the speciﬁed method, declared in this
+    class
+•   getMethod(String name, Class<?>... parameterTypes): Returns a Method
+    object corresponding to the public speciﬁed method
+•   getDeclaredMethods(): Returns an array of Method objects reﬂec6ng all
+    (public and private) the methods declared by the class or interface
+    represented by this Class object.
+•   getMethods(): Returns an array containing Method objects reﬂec6ng all
+    the accessible public methods of the class or interface represented by this
+    Class object.
+
+
+
+
+                                                                             22
+      Working with Class members
+• Members: fields, methods, and constructors
+• For each member, the reflection API provides support to retrieve
+  declaration and type information, and operations unique to the
+  member
+• java.lang.reflect.* :
+   – Member interface
+   – Field class: Fields have a type and a value. The class supports
+     accessing type information and setting and getting values of a field on
+     a given object.
+   – Method class: Methods have return values, parameters and may
+     throw exceptions. The class supports accessing type information for
+     return type and parameters and invoking the method on a given
+     object.
+   – Constructor class: similar to Method class, but:
+       • constructors have no return values
+       • the invocation of a constructor creates a new instance of an object for a given class
+                                                                                            24
+                             Example
+public class Btest                     public class Dtest extends Btest
+{
+   public String aPublicString;        {
+   private String aPrivateString;         public int aPublicInt;
+   public Btest(String aString) {         private int aPrivateInt;
+     // …
+   }                                      public Dtest(int x)
+   public Btest() {                       {
+     // …                                  // …
+   }
+   public Btest(String s1,String s2)      }
+   {
+     // …                                  private void OpD1(String s) {
+   }
+   private void Op1(String s) {             // …
+     // …                                  }
+   }
+   protected String Op2(int x) {
+     // …                                  public String OpD2(int x){
+   }                                        // …
+   public void Op3()    {                  }
+     // …
+   }                                   }
+}
+
+
+                                                                        25
+     Example: retrieving public fields
+// get all public fields
+   try{
+       Class c = Class.forName("Dtest");
+       Field[] publicFields = c.getFields();
+       for (int i = 0; i < publicFields.length; ++i) {
+           String fieldName = publicFields[i].getName();
+           Class typeClass = publicFields[i].getType();
+           System.out.println("Field: " + fieldName +
+              " of type " + typeClass.getName());
+       }
+   } catch (ClassNotFoundException e){
+       System.out.println("Class not found...");
+   }
+             Field: aPublicInt of type int
+             Field: aPublicString of type java.lang.String
+
+                                                           26
+   Example: retrieving declared fields
+Class c = Class.forName("Dtest");
+
+// get all declared fields
+Field[] publicFields = c.getDeclaredFields();
+for (int i = 0; i < publicFields.length; ++i) {
+   String fieldName = publicFields[i].getName();
+   Class typeClass = publicFields[i].getType();
+   System.out.println("Field: " + fieldName + " of type " +
+                    typeClass.getName());
+   }
+
+
+
+             Field: aPublicInt of type int
+             Field: aPrivateInt of type int
+
+                                                         27
+  Example: retrieving public constructors
+// get all public constructors
+
+Constructor[] ctors = c.getConstructors();
+for (int i = 0; i < ctors.length; ++i) {
+   System.out.print("Constructor (");
+   Class[] params = ctors[i].getParameterTypes();
+   for (int k = 0; k < params.length; ++k){
+    String paramType = params[k].getName();
+    System.out.print(paramType + " ");
+    }
+   System.out.println(")");
+}
+
+
+
+
+             Constructor (int)
+
+
+                                                    28
+       Example: retrieving public methods
+//get all public methods
+
+Method[] ms = c.getMethods();
+for (int i = 0; i < ms.length; ++i) {
+   String mname = ms[i].getName();
+   Class retType = ms[i].getReturnType();
+   System.out.print("Method : " + mname + " returns " + retType.getName() + "
+   parameters : ( ");
+   Class[] params = ms[i].getParameterTypes();
+   for (int k = 0; k < params.length; ++k)
+     {
+     String paramType = params[k].getName();
+     System.out.print(paramType + " ");
+     }
+   System.out.println(") ");
+}
+                                Method : OpD2 returns java.lang.String parameters : ( int )
+                                Method : Op3 returns void parameters : ( )
+                                Method : wait returns void parameters : ( )
+                                Method : wait returns void parameters : ( long int )
+                                Method : wait returns void parameters : ( long )
+                                Method : hashCode returns int parameters : ( )
+                                Method : getClass returns java.lang.Class parameters : ( )
+                                Method : equals returns boolean parameters : ( java.lang.Object )
+                                Method : toString returns java.lang.String parameters : ( )
+                                Method : notify returns void parameters : ( )
+                                Method : notifyAll returns void parameters : ( )
+
+                                                                                            29
+Example: retrieving declared methods
+//get all declared methods
+
+Method[] ms = c.getDeclaredMethods();
+for (int i = 0; i < ms.length; ++i) {
+   String mname = ms[i].getName();
+   Class retType = ms[i].getReturnType();
+   System.out.print("Method : " + mname + " returns " + retType.getName()
+   + " parameters : ( ");
+   Class[] params = ms[i].getParameterTypes();
+   for (int k = 0; k < params.length; ++k)
+     {
+     String paramType = params[k].getName();
+     System.out.print(paramType + " ");
+     }
+   System.out.println(") ");
+   }
+
+
+
+             Method : OpD1 returns void parameters : ( java.lang.String )
+             Method : OpD2 returns java.lang.String parameters : ( int )
+                                                                            30
+   Generic methods: eﬀects of erasure
+• getMethod(String name, Class<?>... parameterTypes): Returns
+  a Method object corresponding to the public specified method
+
+
+
+
+• Due to Java’s erasure semantics, generic type information is not
+  represented at run time
+                                                                31
+Generic methods: effects of erasure (2)
+
+
+
+
+                                      32
+            Using Reflection for
+           Program Manipulation
+• Previous examples used Reﬂec8on for Introspec+on
+  only
+• Reﬂec8on is a powerful tool to:
+  – Crea?ng new objects of a type that was not known at
+    compile ?me
+  – Accessing members (accessing ﬁelds or invoking methods)
+    that are not known at compile ?me
+
+
+
+
+                                                          33
+                Using Reﬂec>on for
+               Program Manipula>on
+
+
+     Object                       Class
+
+                                  get/set
+                         invoke
+   compiled
+                                               Field
+     class         new
+      ﬁle
+MyNewClass.class                             Method
+
+                                            Constructor
+
+                                                          34
+                  Creating new objects
+•   Using Default Constructors
+     – java.lang.Class.newInstance()
+
+     Rectangle r = new Rectangle();
+
+     Class c = Class.forName("java.awt.Rectangle") ;
+     Rectangle r = (Rectangle) c.newInstance() ;
+
+•   Using Constructors with Arguments
+     – java.lang.reflect.Constructor.newInstance(Object... initargs)
+
+     Rectangle r = new Rectangle(12,24);
+
+     Class c = Class.forName("java.awt.Rectangle");
+     Class[] intArgsClass = new Class[]{ int.class, int.class };
+     Object[] intArgs = new Object[]{new Integer(12),new Integer(24)};
+     Constructor ctor = c.getConstructor(intArgsClass);
+     Rectangle r = (Rectangle) ctor.newInstance(intArgs);
+
+
+                                                                    35
+               Accessing ﬁelds
+• Getting Field Values
+   Rectangle r = new Rectangle(12,24) ;
+   // h = r.height
+   Class c = r.getClass() ;
+   Field f = c.getField("height") ;
+   Integer h = (Integer) f.get(r) ;
+• Setting Field Values
+   Rectangle r = new Rectangle(12,24) ;
+   // r.width=30
+   Class c = r.getClass() ;
+   Field f = c.getField("width") ;
+   f.set(r, new Integer(30)) ;
+
+
+                                          36
+             Invoking methods
+String s1 = "Hello" ;
+String s2 = "World" ;
+// result = s1.concat(s2);
+
+Class c = String.class ;
+Class[] paramtypes = new Class[] { String.class } ;
+Object[] args = new Object[] { s2 } ;
+Method concatMethod =
+         c.getMethod("concat",paramtypes) ;
+String result =
+         (String) concatMethod.invoke(s1,args) ;
+
+
+
+
+                                                      37
+                Accessible Objects
+• Certain operations are forbidden by privacy rules:
+   – Changing a final field
+   – Reading or writing a private field
+   – Invoking a private method…
+• Such operations fail also if invoked through reflection
+• The programmer can request that Field, Method, and
+  Constructor objects be "accessible."
+   – Request granted if no security manager, or if the existing
+     security manager allows it
+• In this case you can invoke method or access field, even if
+  inaccessible via privacy rules!
+• AccessibleObject Class: the superclass of Field,
+  Method, and Constructor
+
+                                                                  38
+        Accessible Objects (cont.)
+AccessibleObject provides the methods:
+• boolean isAccessible( )
+  – Gets the value of the accessible ﬂag for this object
+• void setAccessible(boolean flag)
+  – Sets the accessible ﬂag for this object to the indicated boolean
+    value
+• static void setAccessible(
+  AccessibleObject[] array, boolean flag)
+  – Sets the accessible ﬂag for an array of objects with a single
+    security check
+
+
+                                                                       39
+                   Accessing private ﬁelds
+// returns a string listing the fields of the object
+
+
+
+
+                                                       40
+                 java.lang.reflect Class Field
+public Object get(Object obj)
+     throws IllegalArgumentException, IllegalAccessException
+
+Returns the value of the field represented by this Field, on the specified object. The value
+is automatically wrapped in an object if it has a primitive type.
+
+The underlying field's value is obtained as follows:
+
+• <omissis>
+
+• If this Field object is enforcing Java language access control, and the underlying field is
+  inaccessible, the method throws an IllegalAccessException. If the underlying field is
+  static, the class that declared the field is initialized if it has not already been initialized.
+
+
+
+
+                                                                                               41
+Accessing private ﬁelds (2)
+
+
+
+
+                              42
+    Exploiting Reflection: Unit Testing
+class Cell {                     class TestCell {
+  int value;                        void testSet( ) { ... }
+  Cell( int v ) { value = v; }      void testSwap( ) {
+  int get( ) { return value; }         Cell c1 = new Cell( 5 );
+  void set( int v )                    Cell c2 = new Cell( 7 );
+       { value = v; }                  c1.swap( c2 );
+  void swap( Cell c ) {                assert c1.get( ) == 7;
+    int tmp = value;                   assert c2.get( ) == 5;
+    value = c.value;                }
+    c.value = tmp;               }
+    }
+ }
+
+
+
+
+                                                           43
+Exploi>ng Reﬂec>on: Unit Tes>ng (cont.)
+
+public static void testDriver( String testClass ) {
+   Class c = Class.forName( testClass );
+   Object tc = c.newInstance( );
+   Method[ ] methods = c.getDeclaredMethods( );
+
+    for( int i = 0; i < methods.length; i++ ) {
+     if( methods[ i ].getName( ).startsWith( "test" ) &&
+         methods[ i ].getParameterTypes( ).length == 0 )
+        methods[ i ].invoke( tc );
+     }
+}
+
+
+         A generic driver; the basic mechanism behind JUnit
+
+
+
+
+                                                              44
+ANNOTATIONS IN JAVA
+
+
+                      45
+   From Modifiers to Annotations
+• Modifiers in Java (static, final, public, …) are meta-
+  data describing properties of program elements
+• Modifiers are reserved keywords, thus wired-in in
+  the language
+• Need for additional mechanisms for providing meta-
+  data, without changing the language
+• Annotations can be understood as (user-) definable
+  modifiers
+
+
+
+                                                           46
+         Structure of Annotations
+• AnnotaHons are made of
+   – AnnotaJon name
+   – A ﬁnite number of a"ributes, i.e. “name = value” pairs, possibly
+     none
+• Syntax:
+   – @annName         eg: @Override
+   – @annName{constExp}
+      shorthand for   @annName{value=constExp}
+   – @annName{name_1 = constExp_1, ..., name_k = constExp_k}
+• constExp’s are expressions that can be evaluated at compile
+  Hme
+• AIributes have a type, thus the supplied values have to
+  converHble to that type
+
+                                                                    47
+Which elements can be annotated?
+• Annotations can be applied to almost any syntactic
+  element:
+   – package declarations
+   – classes (including enumeration types)
+   – interfaces (including annotations)
+   – fields and local variables
+   – methods and constructors
+   – parameters
+   – (recently) any type use
+• They can occur, in any number, together with other
+  modifiers
+• An annotation associates the name and set of indicated
+  attributes to the annotated element
+
+                                                           48
+     Some predefined annotations
+• The Java compiler deﬁnes and recognizes a small set of predeﬁned
+  annota@ons. User deﬁned annota3ons are ignored on compila3on,
+  but can be used by other tools.
+• @Override. Makes explicit the intenJon of the programmer that
+  the declared method overrides a method deﬁned in a superclass.
+  The compiler can issue a warning if no method is overridden.
+• @Deprecated. Declares that the annotated element is not
+  necessarily included in future releases of the Java API. Typically
+  applied to methods, but also to classes and interfaces
+• @SuppressWarnings. Instruct the compiler to avoid issuing
+  warnings for the speciﬁed situaJons (e.g. all, cast, depreca,on,
+  divzero, overrides, unchecked, empty,…). Example:
+ @SuppressWarnings({"deprecation","empty"})
+ void antiqueMethod () {
+    OldClass.deprecatedMethod();
+    ; // why not?
+ }
+
+• @FunctionalInterface. Declares an interface to be functional.
+                                                                  49
+ Deﬁne and use your own annota;ons
+• Programmers can define new annotations, to be used
+   – for documentation purposes of the source
+   – to implement tools that process the content of the .class
+     files generated by the compiler
+   – to inspect the annotations placed on a class at runtime.
+• The annotations have a declaration syntax similar to
+  interfaces (but starting with @interface).
+• Typically, an annotation type is an interface defining
+  fields corresponding to the attributes.
+
+                                                                 50
+    Example: Annotation @InfoCode
+    @interface InfoCode {
+           String author ();
+           String date ();
+           int ver () default 1;
+           int rev () default 0;
+           String [] changes () default {};
+    }
+
+• Each method determines the name of an a"ribute and its type (the
+  return type).
+• A default value can be speciﬁed for each a"ribute (as for ver, rev and
+  changes).
+• A"ribute types can only be primi3ve, String, Class, an Enum, an
+  Annota3on, or an array of those types.
+• AddiJonally (like any interface) an @interface can contain constant
+  declaraJons (with explicit iniJalizaJon), internal classes and
+  interfaces, enumeraJons, but rarely used.
+                                                                       51
+   Example: Annotation @InfoCode (2)
+   @interface InfoCode {
+          String author ();
+          String date ();
+          int ver () default 1;
+          int rev () default 0;
+          String [] changes () default {};
+   }
+
+• The annotaAon could then be applied to various
+  program elements, as in this case:
+   @InfoCode(author="Beppe", date="10/12/07")
+   public class C {
+      public static void m1() { /* ... */ }
+      @InfoCode(author="Gianni",
+             date="4/8/08", ver=1, rev=2)
+      public static void m2() { /* ... */ }
+   }
+                                                   52
+           Annota7ng annota7ons
+Annotation definitions can be annotated in turn, to describe their
+meta-data. Some predefined meta-annotations:
+• @Target. Constrains the program elements to which the annotation
+  can be applied. The value type is annotation.ElementType [], an
+  enum including ANNOTATION_TYPE, CONSTRUCTOR, FIELD,
+  LOCAL_VARIABLE, METHOD, PACKAGE, PARAMETER,
+  TYPE_PARAMETER, TYPE_USE.
+• @Retention. Till when should the annotation be present? Three
+  options (values of enum RetentionPolicy): SOURCE, CLASS
+  (default), RUNTIME
+• @Inherited. Marker annotation. The annotation is inherited by
+  subclasses.
+
+
+                                                                 53
+  Recovering annotations through the
+            Reflection API
+• AnnotaJons in class ﬁles can be exploited by appropriate tools for
+  program analysis. Package javax.annota3on.processing provides a
+  Java API for wriJng such tools.
+• Retrieval of annotaJons at runJme occurs through the ReﬂecJon
+  API.
+• Relevant classes in java.lang.reﬂect (and java.lang.Class) provide
+  suitable methods for retrieving annotaJons.
+• For example
+   – Annotation[] getAnnotations()
+     in class Class: returns an array of Annota)on instances
+   – <T extends Annotation> T
+       getAnnotation(Class<T> annotationClass)
+     in class Method: returns this element's annota)on for the speciﬁed
+     type if such an annota)on is present, else null
+
+                                                                          54
+import java.lang.annotation.*;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE,ElementType.PACKAGE})
+@interface InfoCode {
+    String author ();
+    String date ();                A comprehensive
+    int ver() default 1;
+    int rev() default 0;               example
+    String[] changes() default {};
+}
+@InfoCode(author="Gigi", date="8/12/2008")
+public class TestAnno {
+    @SuppressWarnings("unchecked")
+    public static void main(String[] args) {
+       Class c = TestAnno.class;
+       System.out.print("I am: " + c.toString());
+       InfoCode ic = (InfoCode)c.getAnnotation(InfoCode.class);
+       if (ic != null)
+          System.out.print(" v" + ic.ver() + "." + ic.rev()
+               + " by " + ic.author());
+       System.out.println();
+   }
+}      // prints:       I am: class TestAnno v1.0 by Gigi    55
+                       Conclusions
+• Reﬂec?ve capabili?es need special support at the levels of
+  language (APIs) and compiler
+• Language (API) level:
+   – Java: java.lang.reﬂec)on
+   – .NET: System.Reﬂec)on
+   – Very similar hierarchy of classes suppor)ng reﬂec)on (Metaclasses)
+• Compiler level:
+   – Speciﬁc type informa)on is saved together with the generated code
+     (needed for type discovery and introspec.on)
+   – The generated code must contain also code for automa)cally crea)ng
+     instances of the Metaclasses every )me a new type is deﬁned in the
+     applica)on code
+
+                                                                          56
+

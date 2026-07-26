@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import fitz; print\\('pymupdf', fitz.__doc__\\)\")",
+      "Bash(python3 -c \"import pdfplumber; print\\('pdfplumber ok'\\)\")",
+      "Bash(pdftotext -q -layout -f 10 -l 13 \"lecture_notes/17-AP25-Haskell-TypeClasses.pdf\" -)",
+      "Bash(pdftotext -q -layout -f 5 -l 8 \"lecture_notes/15-AP25-10-27-Types-Polymorphism.pdf\" -)",
+      "Bash(pdftoppm -q -png -r 110 -f 30 -l 30 \"/home/sebastian/ADVANCED/theory/lecture_notes/03-AP-25-09-25-Parsing.pdf\" p03)",
+      "Bash(pdftoppm -q -png -r 110 -f 5 -l 5 \"/home/sebastian/ADVANCED/theory/lecture_notes/15-AP25-10-27-Types-Polymorphism.pdf\" p15)",
+      "Bash(pdftoppm -q -png -r 120 -f 23 -l 23 /home/sebastian/ADVANCED/theory/DOCS/03-ALSU-ch4.pdf alsu)",
+      "Bash(pdftoppm -png -r 150 -f 30 -l 30 -x 200 -y 300 -W 1600 -H 500 /home/sebastian/ADVANCED/theory/lecture_notes/03-AP-25-09-25-Parsing.pdf crop)",
+      "Bash(pdftotext -q -layout lecture_notes/16-AP25-JavaGenerics.pdf -)",
+      "Bash(pdftotext -q -layout lecture_notes/03-AP-25-09-25-Parsing.pdf -)",
+      "Bash(chmod +x scripts/*.sh)",
+      "Bash(./scripts/extract.sh)",
+      "Bash(awk 'BEGIN{p=1} /\\\\f/{p++} /Universal|Ad.hoc|Parametric/{print \"page \"p\": \"$0}' build/text/15-AP25-10-27-Types-Polymorphism.txt)",
+      "Bash(awk 'BEGIN{p=1} /\\\\f/{p++} /class |instance |=>|dictionary|Dictionary/{print p\": \"$0}' build/text/17-AP25-Haskell-TypeClasses.txt)",
+      "Bash(grep -oE '>>=|>>|return|fmap|<\\\\$>|<\\\\*>|do \\\\{|Monad m =>|class Monad' build/text/21-AP25-Monads.txt)",
+      "Bash(./scripts/check-notation.sh NOTATION.md SOURCES.md)",
+      "Bash(./scripts/check-notation.sh /tmp/claude-1000/-home-sebastian-ADVANCED-theory/fa6ca945-ded1-4019-84f7-9cfed45f463e/scratchpad/t.md)",
+      "Bash(echo \"=== exit: $? \\(0 = marker honoured\\) ===\")",
+      "Bash(./scripts/check-notation.sh)"
+    ]
+  }
+}

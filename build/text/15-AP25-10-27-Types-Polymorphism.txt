@@ -1,0 +1,304 @@
+301AA - Advanced Programming
+
+  Lecturer: Andrea Corradini
+           andrea@di.unipi.it
+     h-p://pages.di.unipi.it/corradini/
+
+
+
+   AP-25: Types and Polymorphism
+                 Outline
+• Type Systems
+• Polymorphism: a classiﬁca4on
+• Overloading
+• Coercion
+• Inclusion polymorphism
+• Overriding
+
+
+
+                                 2
+ Types in Programming Languages
+• Hardware: just bits
+• PLs associate types with language constructs which
+  denote values
+   – named constants
+   – variables
+   – record ﬁelds
+   – parameters
+   – literal constants (e.g., 17, 3.14, "foo")
+   – more complicated expressions containing these
+   – and some?mes subrou?nes
+• Types limit the opera<ons that can be applied to such
+  en<<es
+                                                          3
+              Type systems
+A type system includes:
+1. a mechanism to deﬁne types and associate
+   them with language constructs that denote
+   values, and
+2. a set of rules for type equivalence, type
+   compa0bility, and type inference.
+Type checking: the process of ensuring that a
+program obeys type compa4bility rules
+
+                                                4
+     A programming language is
+• Strongly typed if no type error (type clash)
+  can occur: applica4on of an opera4on to a
+  value not suppor4ng such opera4on
+• Sta5cally typed if (most) type checking is
+  performed at compile 4me
+• Dynamically typed otherwise
+• Note: languages with dynamic binding are
+  dynamically typed
+
+                                                 5
+        Extensible type systems
+• Most PLs allows to define new types
+• Three views of types:
+1. Denotational (set of values)
+2. Constructive (basic or composite type)
+3. Abstraction-based (interface of operations)
+
+
+
+
+                                                 6
+          Primi?ve data types
+• Booleans
+• Integers (unsigned, decimal,…)
+• Floating point numbers (rational, complex,…)
+• Characters
+• Discrete / scalar / simple types
+• Enumeration
+• Subrange
+
+                                                 7
+             Composite types
+• Records / Structures (cartesian product)
+• Variant records / Unions (tagged or not)
+• Arrays (func0ons from [1..n] to base type)
+• Sets
+• Pointers (eg: recursive data types)
+• Lists (have recursive deﬁni0on)
+
+
+
+                                               8
+            Subroutine types
+Only some PLs assign types to subrou4nes
+Subrou4nes can be
+• First-class: can be passed as parameter,
+  returned, assigned
+• Second-class: passed as parameter only
+• Third class: not even passed as parameter
+Parameter passing is subject to the type-
+compa4bility rules
+                                              9
+               Polymorphism
+• From Greek: πολυμορφος, composed of πολυ
+  (many) and μορφή (form), thus “having
+  several forms”
+• “Forms” are types
+• “Polymorphic” are func5on names (also
+  operators, methods, …)
+• “Polymorphic” can also be types (parametric
+  data types, type constructors, generics, …)
+  – Usually as encapsula,on of several related
+    func,on names
+
+                                                 10
+        Flavors of polymorphism
+• Ad hoc          Related concepts:
+• Bounded         • Coercion
+• Contravariant   • Generics
+• Covariant       • Inheritance
+• Inclusion       • Macros
+• Invariant       • Overloading
+• Parametric      • Overriding
+• Universal       • Subtyping
+• …               • Templates
+                  • …
+                                      11
+Universal vs. ad hoc polymorphism
+• With ad hoc polymorphism the same function
+  name denotes different algorithms,
+  determined by the actual types
+• With universal polymorphism there is only
+  one algorithm: a single (universal) solution
+  applies to objects of different types
+• Ad hoc and universal polymorphism can
+  coexist
+
+                                             12
+               Binding ?me
+• The binding of the func4on name with the
+  actual code to execute can be
+  – at compile )me – early, sta)c binding
+  – at linking )me
+  – at execu)on )me – late, dynamic binding
+• If it spans over diﬀerent phases, the binding
+  5me is the last one.
+• The earlier the be]er, for debugging reasons.
+
+                                                  13
+    Classification of Polymorphism
+                           Coercion
+                                         Implicit
+                           Parametric
+               Universal                  Explicit      Bounded
+
+                           Inclusion                   Covariant
+                                                        Invariant
+Polymorphism
+                                                      Contravariant
+
+
+
+                                         Overriding
+                Ad hoc
+
+                           Overloading
+                                                               14
+ Overloading (Ad hoc polymorphism)
+• Present in all languages, at least for built-in
+  arithme4c operators: +, *, -, …
+• Some4mes supported for user deﬁned func4ons
+  (Java, C++, …)
+• C++, Haskell, Python,… allow overloading of
+  primi4ve operators by user deﬁned func4ons
+• The code to execute is determined by the type of
+  the arguments, thus
+  – early binding in staBcally typed languages
+  – late binding in dynamically typed languages
+
+
+                                                  15
+       Overloading: an example
+• Func4on for squaring a number:
+  sqr(x) { return x * x; }
+• Typed version (like in C) :
+  int sqr(int x) { return x * x; }
+• Mul4ple versions for diﬀerent types (C):
+  int sqrInt(int x) { return x * x; }
+  double sqrDouble(double x) { return x * x; }
+• Overloading (Java, C++):
+  int sqr(int x) { return x * x; }
+  double sqr(double x) { return x * x; }
+
+                                                 16
+         Overloading in Haskell
+• Haskell introduces type classes for handling
+  overloading in presence of type inference
+• Very nice and clean solu4on, unlike most
+  programming languages
+• Adopted by Rust: traits
+• We shall present this later in the course
+
+
+
+                                                 17
+  Coercion (Universal polymorphism)
+• Coercion: automa4c conversion of an object to a
+  diﬀerent type
+• Opposed to cas*ng, which is explicit
+double sqrt(double x){…}
+double d = sqrt(5) // applied to int
+• Thus the same code is applied to arguments of
+  diﬀerent types
+• In well-designed languages, coercion only
+  possible if there is no loss of informa4on (Java vs
+  C++)
+• Degenerate, uninteres4ng case of polymorphism         18
+    Classiﬁca?on of Polymorphism
+                           Coercion
+                                         Implicit
+                           Parametric
+               Universal                  Explicit      Bounded
+
+                           Inclusion                   Covariant
+                                                        Invariant
+Polymorphism
+                                                      Contravariant
+
+
+
+                                         Overriding
+                Ad hoc
+
+                           Overloading
+                                                               19
+         Inclusion polymorphism
+• Also known as subtyping polymorphism, or just
+  inheritance
+• Polymorphism ensured by (Barbara Liskov’)
+  Substitution principle: an object of a subtype
+  (subclass) can be used in any context where an object
+  of the supertype (superclass) is expected
+• [Java, C++,…] methods/functions with a formal
+  parameter of type T accept an actual parameter of
+  type S <: T (S subtype of T).
+• Methods/virtual functions declared in a class can be
+  invoked on objects of subclasses, if not redefined…
+
+                                                          20
+                             class A{
+                                public void m(){
+Overriding                   }}
+                                   // prints "A"
+
+                             class B extends A{
+• [Java] A method m of a        public void m(){
+  class A can be redeﬁned          // prints "B"
+  in a subclass B of A.      }}
+
+• Dynamic binding:
+A a = new B();   // legal
+a.m();   // overridden method in B is invoked
+• Overriding introduces ad hoc polymorphism in
+  the universal polymorphism of inheritance
+• Resolved at run4me by the lookup done by the
+  invokevirtual opera4on of the JVM
+
+                                                   21
+    Overloading + Overriding: C++ vs Java
+class A {                          class A {
+public:
+   virtual void onFoo() {}             public void onFoo() {}
+   virtual void onFoo(int i) {}        public void onFoo(int i) {}
+};                                 }
+
+class B : public A {               class B extends A {
+public:
+    virtual void onFoo(int i) {}       public void onFoo(int i) {}
+};                                 }
+
+class C : public B {               class C extends B {
+};                                 }
+
+                                   class D {
+int main() {                       public static void main(String[] s)
+                                   {
+    C* c = new C();                        C c = new C();
+    c->onFoo();                            c.onFoo();
+               //Compile error –                       //Compiles !!
+                // doesn't exist       }                          23
+}                                  }
+         Overriding + Overloading
+• [Java] Overloading is type-checked by the compiler
+• Overriding resolved at runtime by the lookup done by
+  invokevirtual
+• [C++] Dynamic method dispatch: C++ adds a v-table to each
+  object from a class having virtual methods
+• The compiler does not see any declaration of onFoo in C,
+  so it continues upwards in the hierarchy. When it checks B,
+  it finds a declaration of void onFoo(int i), so it stops
+  lookup and tries overload resolution, but it fails due to the
+  inconsistency in the arguments.
+• void onFoo(int i) hides the definitions of onFoo in
+  the superclass.
+• Solution: add using A::onFoo; to class B
+
+                                                             24
+
