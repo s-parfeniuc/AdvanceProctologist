@@ -293,11 +293,12 @@ found. The classification of error kinds a compiler can and cannot detect is in
 
 ## Exam-style checks
 
-1. State Definition 4.1 and explain why *both* "point in the program" and "time
-   during execution" appear in it.
+1. State Definition 4.1 (**environment**) and explain why *both* "point in the
+   program" and "time during execution" appear in it.
 2. Why does the environment not exist at the level of the physical machine, and what
    follows for an implementation?
-3. Give the three components of Definition 4.3 and map them onto Python's LEGB rule.
+3. Give the three components of Definition 4.3 (**types of environment**) and map
+   them onto Python's LEGB rule.
 4. State the static scope rule. What does clause (i) exclude, and why does that
    matter?
 5. State the dynamic scope rule, and give a program fragment whose result differs
@@ -310,3 +311,36 @@ found. The classification of error kinds a compiler can and cannot detect is in
    when is a heap needed instead?
 9. Passing a function as a parameter is compatible with a stack; returning one is
    not. Explain, and name the two different solutions adopted by Java and Python.
+
+<details>
+<summary>Answers</summary>
+
+1. **Definition 4.1**: the environment is the set of associations between **names** and **denotable objects** which exist at runtime at a specific **point in the program** and at a specific **time during execution** [GM4 Def. 4.1]. Both coordinates matter: "point in the program" fixes which declarations are textually in scope, while "time during execution" fixes which activation of those declarations is currently live (e.g. under recursion the same point in the text has a different association on each activation). The two scope disciplines each resolve one coordinate: static scope answers the question using only the syntactic point in the program, dynamic scope answers it using only the temporal "most recently activated" criterion.
+
+2. The environment "does not exist at the level of the physical machine" [GM4 §4.1] — hardware has no notion of names or declarations, only addresses and instructions. It follows that the environment is one of the abstract-machine data structures of [ch.01 §1.2](01-foundations-abstract-machines.md#12-abstract-machines) that has no hardware counterpart and must be **simulated** by the implementation — which is exactly what §4.3's activation records, stack, heap, and scope-implementing links (static links for lexical nesting, or the dynamic-scope structures of GM5 §5.5.3) are for.
+
+3. **Local environment** — associations for names declared locally to the block (plus formal parameters, for a procedure block); **non-local environment** — associations visible from inside the block but not declared locally; **global environment** — associations created when execution began, with global ⊆ non-local [GM4 Def. 4.3]. Mapped onto Python's LEGB: local = **L**, non-local = **E** (enclosing), global = **G**; the predefined/builtin environment reached at the end of rule (ii)'s search corresponds to **B**.
+
+4. Static scope (rule of nearest nested scope), three clauses [GM4 Def. 4.4]: (i) a block's local declarations are only those textually present in it, not those of blocks nested inside it; (ii) a name used inside a block is resolved by searching the local environment first, then containing blocks from nearest to furthest, then the predefined environment, else it's an error; (iii) a block (including a procedure's) can be named, and that name belongs to the local environment of its immediately enclosing block. Clause (i) excludes a nested block's own declarations from the enclosing block's local environment. This matters because it is exactly why an inner declaration is invisible to the outer scope — the textbook counterpart of `do_local`'s `spam` being invisible to `scope_test` in [ch.13 §13.3](13-python-decorators-oop.md#the-scoping-example).
+
+5. **Definition 4.5**: under dynamic scope, the valid association for name `X` at point `P` is the **most recent, still-active** association created for `X` when control reaches `P` [GM4 Def. 4.5]. Fragment where static and dynamic scope disagree:
+   ```
+   x = 1
+   procedure p() { print(x) }
+   procedure q() {
+       x = 2      // local to q
+       p()
+   }
+   q()
+   ```
+   Under **static scope**, `p`'s non-local `x` is resolved where `p` is *written* — at the top level — so it prints `1`, regardless of who calls `p`. Under **dynamic scope**, `p`'s `x` is resolved by the most recent still-active association at the moment `p` runs; since `q` activated its own `x = 2` before calling `p`, it prints `2`.
+
+6. Static scope depends "uniquely on the syntactic structure of the program itself", so it "can be determined completely by the compiler" [GM4 §4.3.1] — no execution is needed. Dynamic scope depends on the **call history at runtime** [GM4 §4.3.2], which is only known once the program actually executes calls in some order. This is the same distinction as **binding time** in [ch.07 §7.4](07-types-and-polymorphism.md#74-binding-time): static scope is early/compile-time binding, dynamic scope is late/runtime binding — and per [ch.07 §7.1](07-types-and-polymorphism.md#strong-static-dynamic), a name whose meaning is fixed only at runtime has no compile-time type either.
+
+7. **Global variables** and the **object code instructions** produced by the compiler [GM5 §5.2]. The property enabling static allocation: globals are visible throughout the entire program's execution, so they can be placed at a fixed compiler-determined address for the program's whole duration; object code is likewise fixed once compiled.
+
+8. An **activation record** (or **frame**) is the set of information relating to one activation of a procedure [GM5 §5.3.2]. A stack is the right structure because block and procedure activations **nest** — the most recently entered is the first to be left — so LIFO allocation matches the control flow exactly [GM5 §5.3]. A **heap** is needed instead when an object's lifetime does **not** follow the nesting of blocks, i.e. it must outlive the frame that created it [GM5 §5.4].
+
+9. Passing a function **inward** as a parameter is compatible with a stack because the passed function cannot outlive the frame that supplied it — its activation record is safely gone once the call returns. Returning a function **outward** is not: the returned function may survive its defining frame, and if it refers to that frame's locals (a **closure**), those locals cannot live on the stack [GM7 §7.2.1–7.2.2]. Java's solution: require captured locals to be **effectively final**, so a **copy** of the value suffices and no true closure (no shared, mutable heap cell) is necessary ([ch.11 §11.2](11-java-lambdas-streams.md#variable-capture)). Python's solution: **heap-allocated cells** holding the captured variables, reachable via the function's `__closure__` ([ch.13 §13.1](13-python-decorators-oop.md#higher-order-functions)).
+
+</details>

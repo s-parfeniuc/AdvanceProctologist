@@ -615,6 +615,96 @@ Read this as the concrete form of Figure 2.7. Three details carry the lesson:
    which grouping it forces.
 5. Why can "variables are declared before use" not be expressed by a
    context-free grammar? Which compiler phase enforces it?
-6. In Figure 2.8, explain what breaks if the lines `i ← mark` are deleted.
+6. In Figure 2.8 (the recursive descent parser for the `type` grammar), explain what
+   breaks if the lines `i ← mark` are deleted.
 7. Recursive descent is exponential in general. Point to the exact line of
-   Figure 2.7 responsible, and say what information would remove it.
+   Figure 2.7 (the generic procedure for a nonterminal `A`) responsible, and say what
+   information would remove it.
+
+<details>
+<summary>Answers</summary>
+
+1. `G = ({A}, {a,b}, P, A)` with `P = { A → aAb | ε }`. Both productions have
+   the form `A → α` with `A ∈ N`, `α ∈ (N∪T)*`, so `G` is **context free**
+   (this is exactly `L₁ = { aⁿbⁿ | n ≥ 0 }` from §2.3). It is not regular
+   because `A → aAb` is neither right-linear (`A → wB` or `A → w`) nor
+   left-linear (`A → Bw`) — the nonterminal `A` sits *between* terminals on
+   both sides. Semantically: a stack is exactly what distinguishes
+   context-free recognition from regular recognition, which is why `{aⁿbⁿ}`
+   needs one — a finite-state automaton has no way to count an unbounded `n`
+   of `a`s and check it against the following `b`s.
+
+2. One-step derivation: `γ α δ ⇒ γ β δ` where `α → β ∈ P`. `⇒` is
+   **leftmost** (`⇒ₗₘ`) if `γ` contains no nonterminal — i.e. everything to
+   the left of the rewritten `α` is already terminal, so `α` begins at the
+   leftmost nonterminal of the sentential form. `⇒` is **rightmost** (`⇒ᵣₘ`)
+   if `δ` contains no nonterminal — the mirror image: everything to the
+   right of `α` is already terminal, so `α` begins at the rightmost
+   nonterminal.
+
+3. `L(G) = { w ∈ T* | S ⇒⁺ w }`. `⇒*` differs from `⇒⁺` only by adding the
+   zero-step case `S ⇒* S` (reflexivity). This zero-step pair only changes
+   the defined set if `S` itself is a member of `T*`. But `S ∈ N` by
+   definition of the grammar tuple `G = (N, T, P, S)`, and `N` and `T` are
+   disjoint, so `S ∉ T*`. The extra pair `S ⇒* S` therefore never satisfies
+   the `w ∈ T*` side condition, and `{ w ∈ T* | S ⇒⁺ w } = { w ∈ T* | S ⇒* w }`
+   for every grammar with `S ∈ N`.
+
+4. Ambiguity: with `P = string → string + string | string - string | 0 | … | 9`,
+   `9-5+2` has two distinct leftmost derivations/parse trees:
+
+   ```
+   string ⇒ string + string ⇒ string - string + string
+          ⇒ 9 - string + string ⇒ 9 - 5 + string ⇒ 9 - 5 + 2      (groups as (9-5)+2)
+
+   string ⇒ string - string ⇒ string - string + string
+          ⇒ 9 - string + string ⇒ 9 - 5 + string ⇒ 9 - 5 + 2      (groups as 9-(5+2))
+   ```
+
+   Since two different parse trees yield the same string `9-5+2` (Figure
+   2.5), the grammar is ambiguous by the p.15 definition. An unambiguous
+   grammar for the same language is the `list`/`digit` grammar of §2.4:
+
+   ```
+   list  → list + digit | list - digit | digit
+   digit → 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+   ```
+
+   Recurring only on the left of `+`/`-` forces **left grouping**: the
+   leftmost derivation of `9-5+2` given in §2.4 builds exactly `(9-5)+2`.
+
+5. `{ wcw | w ∈ (a|b)* }` needs an unbounded correspondence between two
+   separated parts of the input (the declaration and the later use), and a
+   stack cannot check this because it must already be consumed/popped to
+   reach the second `w` — it can match nested structure, not two
+   arbitrarily-separated occurrences of the same unbounded string. This
+   constraint is not enforced by the parser at all; it is left to
+   **semantic analysis**, the phase after syntax analysis in the pipeline of
+   Figure 2.1 (§2.1).
+
+6. `mark ← i` / `i ← mark` *is* the backtracking (§2.10, point 1): each
+   alternative saves the input position before trying it and restores it
+   after failing. If the `i ← mark` lines are deleted, a partially-matched
+   but ultimately failing alternative leaves `i` wherever its last
+   successful `match()` advanced it, instead of resetting to the position
+   where that alternative started. E.g. in `TYPE()`, if `match('^')`
+   succeeds (advancing `i`) but `match('id')` then fails, `i` is left one
+   token past `mark`. Without the reset, the next alternative
+   (`array [ simple ] of type`) starts testing `match('array')` against the
+   wrong input position, so it fails even on input that actually has the
+   `array …` form — the parser rejects strings it should accept. Backtracking
+   is exactly the discipline of undoing this state, which — per the closing
+   note of §2.10 — is what a predictive (lookahead-based) parser will not
+   need at all.
+
+7. The line `Choose an A-production, A → X₁ X₂ ⋯ X_k;` is the culprit: it is
+   a nondeterministic choice with no information to choose by, so the
+   implementation must try each alternative in turn, and a failure deep
+   inside some `X_i()` requires undoing everything tried so far and
+   retrying with the next alternative — work that can multiply at every
+   level of the tree. What removes it is **FIRST sets**: knowing, from one
+   token of lookahead, which production to choose replaces the whole
+   try-and-restore structure with a single test on the lookahead token —
+   precisely what [chapter 03](03-top-down-parsing.md) does.
+
+</details>

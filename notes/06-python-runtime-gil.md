@@ -335,8 +335,8 @@ convention of [ch.13 §13.6](13-python-decorators-oop.md#encapsulation-and-name-
 3. What does `del x` actually do?
 4. The shared-counter program prints 20000 in Python but less than 20000 in C++,
    although `counter = counter + 1` is not atomic in either. Explain.
-5. Reconstruct the five-step argument of [GIL p.6] from "refcounts must be atomic"
-   to "lock the whole interpreter".
+5. Reconstruct the five-step argument of [GIL p.6] (*handling reference counters*)
+   from "refcounts must be atomic" to "lock the whole interpreter".
 6. Does the GIL make `counter = counter + 1` atomic? Justify your answer, and say
    what follows for programs that appear to work without a lock.
 7. Under what conditions does multithreading speed up a Python program? Under what
@@ -346,3 +346,72 @@ convention of [ch.13 §13.6](13-python-decorators-oop.md#encapsulation-and-name-
 9. Why were free-threaded CPython interpreters historically rejected, and which
    trade-off does that reflect?
 10. Free-threaded mode targets CPU-bound tasks specifically. Why those?
+
+<details>
+<summary>Answers</summary>
+
+1. Reference counting only detects that a count reached zero; it cannot detect
+   a group of objects kept alive **only by references to each other**. Example:
+   `a.next = b; b.next = a` with no external reference to either — each still
+   has a refcount of 1, so neither is ever freed by counting alone. A periodic
+   mark & sweep pass, tracing from the roots, is needed to reclaim such cycles.
+2. A **dangling pointer** would require an object to be freed while a live
+   reference to it still exists; reference counting makes that structurally
+   impossible, since any live reference keeps the count ≥ 1. A **double free**
+   would require the programmer to request deallocation twice, but there is no
+   way to request deallocation at all — freeing happens only when the count
+   hits zero, which is the interpreter's decision, not the programmer's.
+   Rust ([ch.05](05-rust-ownership-borrowing.md)) rules out the same two defect
+   classes at **compile time**, by proving no reference outlives its owner, and
+   frees deterministically with no runtime bookkeeping; Python instead keeps a
+   runtime counter and frees when it reaches zero, costing memory and time per
+   object but constraining the programmer not at all.
+3. `del x` does **not** free memory. It removes the name `x` from its
+   namespace (a dictionary), which decrements the referenced object's refcount;
+   the object is freed only if that count then reaches 0.
+4. Both statements are equally non-atomic (read, add, write), but in Python the
+   **GIL** ensures only one thread executes bytecode at a time, so the two
+   threads' read-modify-write sequences never actually interleave — each
+   effectively runs to completion relative to the other at the points that
+   matter here. In C++, with real concurrent execution and no such
+   serialisation, the two threads' reads and writes can interleave, so an
+   increment from one thread can be overwritten by the other, losing updates.
+5. (1) Refcount updates must happen **atomically**, or a concurrent update can
+   corrupt the count. (2) Under multi-threading this means every refcount
+   modification needs synchronization, or the values go wrong. (3)
+   Synchronization primitives are expensive on modern hardware. (4) Because
+   **almost every operation in CPython touches some refcount**, fine-grained
+   synchronization would mean paying that cost almost everywhere. (5) Therefore
+   fine-grained locking is not viable — the practical alternative is a single
+   lock on the whole interpreter, the GIL.
+6. No. The GIL serialises **bytecode execution**, not multi-bytecode
+   operations — a thread can still be suspended between the load and the store
+   of `counter = counter + 1`. The shared-counter example happens to come out
+   correct because of how the suspension points fall, but a program that
+   relies on that is relying on an implementation detail, not a guarantee —
+   which is why `threading.Lock` still exists and is still needed for
+   correctness in general.
+7. It speeds a program up when threads are **I/O-bound**, since the GIL is
+   released during I/O (and by compute-heavy C extensions like compression or
+   hashing), so waiting threads overlap real work. It can **slow a program
+   down** when threads are CPU-bound: two threads calling a function can take
+   *longer* than one thread calling it twice, because the threads pay GIL
+   acquisition/release overhead while gaining no real parallelism.
+8. Jython (JVM) and IronPython (.NET) run on runtimes that use **tracing
+   garbage collectors** instead of reference counting. This shows the GIL is
+   not a consequence of the Python *language* but specifically of CPython's
+   **memory-management choice**: without per-object refcounts to protect,
+   there is nothing forcing a single global lock.
+9. Historical attempts at finer-grained locking made the **common,
+   single-processor case slower**, even though they helped the multi-threaded
+   case; Guido van Rossum has said he will reject any proposal that slows down
+   single-threaded programs. This reflects a trade-off between the common case
+   (one thread, which the project protects) and the desirable-but-rarer case
+   (many threads fully parallel), resolved in favor of the common case.
+10. Because CPU-bound tasks are exactly the ones the GIL prevents from
+    benefiting from threads — I/O-bound tasks already overlap work today since
+    the GIL is released during I/O, so removing the GIL adds nothing there;
+    the payoff is specifically for computation that currently serialises on
+    the interpreter lock.
+
+</details>

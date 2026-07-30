@@ -1137,13 +1137,143 @@ built from the higher-order function features, with no new language mechanism.
 11. `obj.f(a)` is sugar for what? What follows about the status of `self`?
 12. Why is there at most one `__init__`, and how is the missing overloading
     supplied?
-13. In the Figure 13.5 example, why does `p.move(1,1)` subtract while
+13. In the Figure 13.5 example (a `move` stored in the instance alongside the
+    class's own `move`), why does `p.move(1,1)` subtract while
     `p.__class__.move(p,2,2)` adds?
 14. Python needs "no additional mechanisms" for inheritance. Which single rule does
     it reuse, and why does that make all methods virtual?
 15. `__spam` is not private. What is name mangling actually for? Give the two
-    examples from [Python pp.37–38].
+    examples from [Python pp.37–38] (avoiding clashes; avoiding broken logic).
 16. In the `Mapping` example, why does `self.__update(iterable)` fix what
     `self.update(iterable)` breaks?
 17. Distinguish instance, class and static methods by what their first parameter
     receives.
+
+<details>
+<summary>Answers</summary>
+
+1. **Dynamic typing**, **duck typing**, and **default (optional) parameters**. With
+   `def sum(n,m): return n+m`: `sum(3,4)` → `7` and `sum('hel','lo')` → `'hello'`
+   are the *same* definition working on two types because `+` is resolved on the
+   actual objects at runtime (duck typing under dynamic typing) — no static
+   dispatch needed. `def sum(n,m=5)` then lets `sum(3)` → `8`, covering the
+   one-argument case that Java would need a second overload for, with a default
+   parameter instead.
+2. In the `def w(*args)` header, `*args` **collects** the positional arguments `w`
+   was called with into a tuple. In the call `f(*args)`, `*args` **unpacks** that
+   tuple back into separate positional arguments for `f`. Same syntax, opposite
+   direction.
+3. Two `for` clauses in a comprehension are **nested loops**, so they enumerate
+   every `(x,y)` pair — the **cartesian product**, 4×10 = 40 results. Binary `map`
+   instead pairs its iterables **positionally** and **stops at the shortest**,
+   giving 4 results. The correct comprehension pairs them the same way, with
+   `zip`:
+   ```python
+   [x+y for (x,y) in zip(range(4),range(10))]
+   ```
+4. It removes the **falsy** values: `0`, `""`, `None`, `[]`, `()`, `False`. `-1` is
+   **not** removed — `-1` is truthy.
+5. ```python
+   def say_hello():
+       print("Hello!")
+   say_hello = my_decorator(say_hello)
+   ```
+   Afterwards `say_hello` is bound to **`wrapper`**, the inner function returned by
+   `my_decorator`, which closes over the original function (still reachable only
+   through that closure's `func`).
+6. `echo("Hi...")` fails because the name `echo` is now bound to
+   `wrapper_do_twice`, defined as `def wrapper_do_twice(): ...` — zero parameters —
+   so passing one positional argument raises `TypeError: wrapper_do_twice() takes 0
+   positional arguments but 1 was given`. `echo()` fails differently: called with
+   no arguments, the wrapper runs and calls `func()` internally, i.e. the
+   *original* `echo(str)`, which does require its argument — `TypeError: echo()
+   missing 1 required positional argument: 'str'`.
+7. ```python
+   import functools
+   def decorator(func):
+       @functools.wraps(func)
+       def wrapper_decorator(*args, **kwargs):
+           value = func(*args, **kwargs)
+           return value
+       return wrapper_decorator
+   ```
+   `*args, **kwargs` fixes the "does not work with parameters" defect — the
+   wrapper now accepts any signature. `value = func(...)` then `return value`
+   fixes result-swallowing — the naive `do_twice` returned `None`. `@functools.
+   wraps(func)` fixes broken introspection by copying `__name__`, `__doc__` and
+   other special attributes from the original onto the wrapper.
+8. It copies the original function's special attributes — `__name__`, `__doc__`,
+   etc. — onto the wrapper. Without it, `say_hello.__name__` (or `func.__name__` as
+   used inside `timer`) would report the wrapper's own name, e.g.
+   `"wrapper_do_twice"`, breaking introspection and any documentation tool that
+   relies on it.
+9. **LEGB**: a name reference is searched in the **L**ocal scope, then any
+   **E**nclosing function scopes, then the module's **G**lobal scope, then
+   **B**uiltins. **Assignment rule**: an assignment always creates/updates a
+   binding in the **local** scope, regardless of what exists outside, unless
+   `nonlocal` or `global` is declared. Tracing `scope_test`: `do_local` assigns
+   `spam` with no declaration, so it creates a *new local* inside `do_local` —
+   `scope_test`'s `spam` is untouched → `"After local assignment: test spam"`.
+   `do_nonlocal` declares `nonlocal spam`, so its assignment rebinds
+   `scope_test`'s own `spam` → `"After nonlocal assignment: nonlocal spam"`.
+   `do_global` declares `global spam`, rebinding the *module-level* `spam` instead
+   — `scope_test`'s `spam` is unaffected, still `"nonlocal spam"` →
+   `"After global assignment: nonlocal spam"`. The final `print`, at module scope,
+   sees the global that `do_global` just created → `"In global scope: global
+   spam"`.
+10. `Point.y = 3` sets the **class** attribute. `p1.y = 5` is an **assignment** on
+    an instance, so — the write-half of the instance-lookup rule — it always
+    creates a *new* binding in `p1`'s own namespace, leaving `Point.y` and `p2`
+    untouched. Reading `p2.y` finds nothing in `p2`'s own (empty) namespace and
+    falls through to the class attribute `Point.y`, which is `3`.
+11. `obj.f(a)` is sugar for `obj.__class__.f(obj, a)`. It follows that `self` is
+    **not a keyword** and gets no special treatment: it is only the conventional
+    name for the first parameter, which dot-notation fills in with the receiver.
+    Any name would work equally.
+12. Because Python has **no function overloading** — stated explicitly for
+    constructors: "at most ONE constructor (no overloading in Python!)". The
+    missing overloading is supplied the same way as for ordinary functions
+    (§13.1): **default parameters**, e.g. `def __init__(self, x=0, y=0)`, so one
+    `__init__` covers `Point()`, `Point(3)` and `Point(3,4)`.
+13. `__init__` defines an inner function `move(z,t)` that closes over `self` and
+    **subtracts**, then does `self.move = move`, storing it in `p`'s own instance
+    namespace. The class separately defines `move(self,dx,dy)` that **adds**.
+    `p.move(1,1)` looks up `move` and — instance searched before class — finds the
+    instance's subtracting closure first: `1 - 1 = 0`. `p.__class__.move(p,2,2)`
+    explicitly bypasses the instance and reaches the class's version directly,
+    which adds: `0 + 2 = 2`.
+14. It reuses **namespace nesting**: the derived class's namespace is nested in
+    the base class's namespace and used as the next non-local scope to resolve
+    names — the same lookup rule that governs locals, instances and classes
+    elsewhere in the chapter. Because lookup always starts at the instance and
+    walks outward, the most derived definition of a method is always found first
+    — which is exactly what "automatically virtual" means, with no `virtual`
+    keyword and no non-virtual option.
+15. Name mangling is not privacy — "Private instance variables … don't exist in
+    Python" — it exists to **avoid accidental name clashes** between a class and
+    its subclasses. Example 1 (clash avoidance, pp.37): `BaseClass.__mangled_attr`
+    and `SubClass.__mangled_attr` mangle to two different names,
+    `_BaseClass__mangled_attr` and `_SubClass__mangled_attr`, so `SubClass.
+    __init__` does not overwrite the base's attribute; `get_mangled_attr`
+    (defined in `BaseClass`) always reads `_BaseClass__mangled_attr`, giving
+    `"BaseClass attribute"` even on a `SubClass` instance, while
+    `get_subclass_attr` reads the separately mangled subclass copy. Example 2
+    (broken logic, p.38): the `Mapping`/`MappingSubclass` example, answered in
+    full in Q16.
+16. `self.update(iterable)` is a **virtual** call: lookup starts at the instance's
+    actual class, so on a `MappingSubclass` instance it finds
+    `update(self,keys,values)` — two required parameters — and calling it with
+    only `iterable` raises `TypeError`. `self.__update(iterable)` is mangled at
+    definition time to `self._Mapping__update(iterable)`, a name only `Mapping`
+    defines (via `__update = update`), so lookup resolves straight to `Mapping`'s
+    own one-argument `update` regardless of what `MappingSubclass` overrides —
+    mangling acts as a non-virtual call, so `__init__` keeps working after
+    subclassing.
+17. **Instance method** (no decorator): first parameter receives the **instance**
+    (conventionally `self`). **Class method** (`@classmethod`): first parameter
+    receives the **class**. **Static method** (`@staticmethod`): **nothing** is
+    bound to a first parameter — it is an ordinary function living in the class
+    namespace, callable on the class or on any instance, but unable to access
+    instance attributes/methods.
+
+</details>

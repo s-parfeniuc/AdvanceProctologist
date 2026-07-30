@@ -600,12 +600,101 @@ than behaving unexpectedly at runtime.
 4. Give the test that distinguishes ad hoc from universal polymorphism, and
    classify: Java generics, Java overloading, `int`→`double` conversion, Java
    overriding.
-5. In Figure 7.1, Overriding has two parents. Explain both.
+5. In Figure 7.1 (the classification of polymorphism), Overriding has two parents.
+   Explain both.
 6. Why is coercion called a "degenerate, uninteresting case of polymorphism"
    despite being classified as universal?
 7. `A a = new B(); a.m();` invokes `B`'s method. Which step uses the declared
    type of `a` and which uses its runtime class?
 8. Explain why `c->onFoo()` fails in C++ but `c.onFoo()` compiles in Java for the
-   hierarchy of Figure 7.4, and what `using A::onFoo;` changes.
+   hierarchy of Figure 7.4 (the `A`/`B`/`C` classes with two `onFoo` overloads),
+   and what `using A::onFoo;` changes.
 9. Overload resolution and virtual dispatch both happen for a single Java call.
    Which runs first, what does each decide, and at what binding time?
+
+<details>
+<summary>Answers</summary>
+
+1. **Strongly typed** means no **type error** (type clash) can ever occur —
+   an operation is never applied to a value that does not support it.
+   **Statically typed** means (most) type checking happens at compile time,
+   as opposed to dynamically. The two axes are independent: Python is
+   strongly but *dynamically* typed — it raises a `TypeError` rather than
+   reinterpreting bits, but only at execution time — while C is statically
+   but *weakly* typed, since a cast can defeat the compile-time checker.
+
+2. **Denotational** (type = set of values) suggests equivalence by same
+   membership: two types are equal iff they contain the same values.
+   **Constructive** (type = basic or composite, built by type constructors)
+   suggests *structural* equivalence: equal iff built from the same
+   constructors over the same components. **Abstraction-based** (type =
+   interface of operations) suggests equivalence by same interface: two
+   different representations count as the same type if they expose the
+   same operations — the view OO subtyping and Haskell type classes take.
+
+3. An array indexes into its base type exactly the way a function maps an
+   argument to a result — `a[i]` and `f(i)` are the same kind of operation,
+   which is why array access reuses function-application notation. A
+   variant record/union is analogously a **sum** `A + B`: its values are one
+   value from *either* side plus a tag. Because the tag is present and the
+   set of cases is fixed, a `match` can be checked for **completeness** (all
+   tags covered); a plain C union carries no tag, so there is nothing for
+   the compiler to check completeness against.
+
+4. The test: **count the algorithms**. One name, several distinct
+   implementations selected by type → **ad hoc**. One implementation
+   serving every admissible type → **universal**. Classification: Java
+   generics — universal (parametric); Java overloading — ad hoc;
+   `int`→`double` conversion — universal, but the degenerate coercion case
+   (§7.6); Java overriding — ad hoc (it selects among distinct method
+   bodies by runtime type), even though it rides on the universal
+   mechanism of inheritance.
+
+5. Overriding has a parent in **Inclusion** because it depends on the
+   subtype relation `S <: T`: one call site, `a.m()`, is written to serve
+   every subtype of `A` — that reuse of a single call site across types is
+   universal. It also has a parent in **Ad hoc** because, once a subclass
+   redefines `m`, the name `m` no longer denotes one algorithm but several
+   (`A`'s and `B`'s), selected by the object's actual type — exactly the
+   ad hoc test of §7.3. Inheritance supplies the universal part (one call
+   site, many types); redefinition supplies the ad hoc part (many bodies,
+   chosen by type).
+
+6. Because the polymorphism does not actually live in the function: `sqrt`
+   in `double sqrt(double x)` only ever operates on `double`. The compiler
+   silently converts `5` to `5.0` before the call, so it is the *argument*
+   that is made flexible, not the code. Contrast parametric polymorphism
+   (one algorithm genuinely running on many types) and overloading (many
+   algorithms): coercion is one algorithm running on one type, with
+   conversions arranged around it, so it adds no new expressive power —
+   hence "degenerate, uninteresting."
+
+7. `A a = new B();` is a legality check against the **declared type**: it
+   type-checks because `B <: A` (substitution principle), so a `B` may be
+   stored where an `A` is expected. `a.m();` is resolved at the call by the
+   **runtime class** of `a`, which is `B` — the JVM's `invokevirtual`
+   looks up `m` starting from the actual object's class, finds `B`'s
+   override, and runs it. So: declared type governs what is legal to
+   write; runtime class governs which body actually executes.
+
+8. In C++, method lookup for `c->onFoo()` is **name-based**: the compiler
+   walks up from `C`, finds no `onFoo` there, continues to `B`, finds a
+   declaration of `onFoo(int)`, and **stops** — overload resolution then
+   runs only among the candidates visible in `B`. Since `B` declares only
+   the `int` overload, the zero-argument call has no candidate and fails
+   to compile; `A`'s `void onFoo()` is never considered because `B`'s
+   `onFoo(int)` **hides** it. `using A::onFoo;` in `B` re-imports `A`'s
+   overloads into `B`'s scope, so resolution again sees both signatures
+   and the call succeeds. Java instead collects applicable overloads from
+   the **whole hierarchy** before resolving, so `A`'s `onFoo()` remains a
+   candidate for a `C` object and `c.onFoo()` compiles.
+
+9. **Overload resolution** runs first, at **compile time** (early binding):
+   it picks a *signature* from the static types of the arguments. **Virtual
+   dispatch** (`invokevirtual`) runs second, at **execution time** (late
+   binding): given that signature, it picks the *implementation* by
+   looking up the runtime class of the receiver. Overloading answers
+   "which method signature"; overriding answers "whose body for that
+   signature."
+
+</details>

@@ -658,6 +658,7 @@ fails at runtime, which is the "errors surface at runtime" trade-off of §12.2.
 > Class c = r.getClass() ;
 > Field f = c.getField("width") ;
 > f.set(r, new Integer(30)) ;
+> r.width = new Integer(30) ;
 > ```
 
 A `Field` object represents the field *of the class*, not of any particular object,
@@ -1157,5 +1158,121 @@ available at runtime.
     two reasons this encoding is convenient.
 12. A colleague's `@InfoCode` annotation is not found by `getAnnotation` at
     runtime. Give the most likely cause.
-13. Rewrite the test driver of §12.6 to use an annotation instead of a naming
-    convention, and say what is gained.
+13. Rewrite the JUnit-style test driver of §12.6 (*unit testing*) to use an
+    annotation instead of a naming convention, and say what is gained.
+
+<details>
+<summary>Answers</summary>
+
+1. **Reification** is encoding the program's own execution state as data; it is
+   the prerequisite the other two depend on. **Introspection** is read access to
+   that data (observing state); **intercession** is write access (modifying
+   execution state or its interpretation). Without reification neither is
+   possible — there is nothing to read or write.
+2. **Structural** reflection reifies the program itself and its abstract data
+   types (classes, fields, methods). **Behavioral** reflection reifies the
+   language's own semantics/implementation and the runtime system. Java provides
+   only structural reflection — you can enumerate a class's methods, but you
+   cannot reify or replace the JVM's dispatch mechanism from inside a Java
+   program.
+3. Macros over reflection: (a) **safety** — macro misuse fails at *compile time*,
+   reflection errors (bad cast, missing member) surface at *runtime*; (b)
+   **performance** — macros are zero-cost, reflective calls carry invocation
+   overhead. Reflection over macros: (a) it can act on **types unknown at
+   compile time** (`Class.forName` on a name read from config), which a macro
+   — expanded before the program runs — cannot; (b) it needs **no
+   homoiconicity/macro facility** in the language, so it works in a language
+   like Java that has neither.
+4. Because the `.class` file already contains the class's full structure —
+   `fields_count`/`field_info`, `methods_count`/`method_info`,
+   `interfaces`, `attributes` — since the JVM needs it for linking and
+   verification anyway. Reflection does not add data to the runtime; it exposes
+   data that had to be there already.
+5. On `Dtest`: `getFields()` → `aPublicInt` (declared) and `aPublicString`
+   (inherited from `Btest`) — both private fields excluded. `getDeclaredFields()`
+   → `aPublicInt` and `aPrivateInt` — both declared in `Dtest`, nothing
+   inherited. `getConstructors()` → only `Dtest(int)`; `Btest`'s three
+   constructors are omitted because **constructors are never inherited**.
+   `getMethods()` → `OpD2`, `Op3`, plus `Object`'s public methods (`wait` ×3,
+   `hashCode`, `getClass`, `equals`, `toString`, `notify`, `notifyAll`); `OpD1`
+   is omitted (private), `Op1` is omitted (private, in `Btest`), `Op2` is
+   omitted (protected, not public).
+6. Because private members of a superclass are not accessible even reflectively
+   without walking the class hierarchy one class at a time — there is
+   deliberately no shortcut API that would expose a superclass's private state
+   in one call, since that would erase encapsulation across the whole hierarchy
+   rather than just within one class.
+7. Because of **type erasure**: at the bytecode level `LinkedList<String>`'s
+   method really is `add(Object)` — `add(String)` never existed as a compiled
+   signature. `getMethod("add", Object.class)` matches the erased signature and
+   succeeds. This shows reflection only ever sees the **erased** view of generic
+   code, so it cannot recover a generic collection's element type.
+8. `getDeclaredField`/`getDeclaredFields` only locate the member — that is
+   introspection, and it is always permitted, even for private members. `f.get(o)`
+   actually reads the value, and Java's privacy rules **still apply** to
+   reflective access by default, so it throws `IllegalAccessException`. The one
+   line that changes the outcome is `f.setAccessible(true);`, which suppresses
+   access checking on that `Field` object.
+9. ```java
+   public static void testDriver( String testClass ) {
+      Class c = Class.forName( testClass );
+      Object tc = c.newInstance( );
+      Method[ ] methods = c.getDeclaredMethods( );
+       for( int i = 0; i < methods.length; i++ ) {
+        if( methods[ i ].getName( ).startsWith( "test" ) &&
+            methods[ i ].getParameterTypes( ).length == 0 )
+           methods[ i ].invoke( tc );
+        }
+   }
+   ```
+   Four mechanisms: `Class.forName` (dynamic loading), `newInstance` (dynamic
+   construction), `getDeclaredMethods` (introspection), `invoke` (reflexive
+   invocation).
+10. It is user-definable in the sense that `@InfoCode` and `public` occupy the
+    same syntactic position and both attach metadata to a declaration — but
+    `public` is a reserved keyword wired into the grammar, while `@InfoCode` is
+    a library-level declaration (`@interface`) the programmer writes. Attribute
+    values must be compile-time constants because an annotation cannot compute
+    anything: it has to be stored as literal data in the class file's
+    `attributes` array, so its values must already be fully resolved when that
+    file is written.
+11. (a) It reuses familiar interface-declaration syntax, and each attribute's
+    **method return type doubles as its type declaration**, so no separate
+    type-annotation syntax is needed. (b) The **same methods** declared in the
+    `@interface` are called both to *supply* values (via `default`) and to
+    *read* them back reflectively (`ic.author()`, `ic.ver()`), so one
+    declaration serves definition and retrieval without a separate accessor
+    mechanism.
+12. Most likely cause: the annotation type was not declared with
+    `@Retention(RetentionPolicy.RUNTIME)`. The default policy is `CLASS`, which
+    keeps the annotation in the `.class` file but never loads it into the JVM,
+    so `getAnnotation` finds nothing and returns `null` even though the
+    annotation was applied correctly in source.
+13. ```java
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.METHOD)
+    @interface Test {}
+
+    class TestCell {
+      @Test void testSet( ) { ... }
+      @Test void testSwap( ) { ... }
+    }
+
+    public static void testDriver( String testClass ) throws Exception {
+       Class c = Class.forName( testClass );
+       Object tc = c.newInstance( );
+       Method[ ] methods = c.getDeclaredMethods( );
+       for( int i = 0; i < methods.length; i++ ) {
+          if( methods[ i ].getAnnotation( Test.class ) != null &&
+              methods[ i ].getParameterTypes( ).length == 0 )
+             methods[ i ].invoke( tc );
+       }
+    }
+    ```
+    Gained: the marker moves from a **string-matching naming convention**
+    (`startsWith("test")`) to a declaration the **compiler checks** — `@Target`
+    restricts `@Test` to methods, so misapplying it is a compile error instead
+    of a silently-skipped method — and test methods are no longer forced to
+    start their name with `test`.
+
+</details>

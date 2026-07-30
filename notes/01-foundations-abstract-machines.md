@@ -409,16 +409,16 @@ Haskell in [ch.09](09-haskell-typeclasses.md) and
 
 ## Exam-style checks
 
-1. State Definition 1.1 and identify the two components of an abstract machine.
-2. Give Definitions 1.3 and 1.4, and explain the difference purely in terms of the
-   **domain and codomain** of the two functions.
+1. State Definition 1.1 (**abstract machine**) and identify its two components.
+2. Give Definitions 1.3 and 1.4 (**interpreter** and **compiler**), and explain the
+   difference purely in terms of the **domain and codomain** of the two functions.
 3. Why is an interpreter a **partial** function while a compiler is total?
 4. The textbook says the interpreter "does not generate code" although it shows a
    code listing. What is the listing for?
 5. Explain why an interpreter must decode the body `C` of a loop `n` times, and what
    a compiler does instead.
 6. Give three reasons why the compiled/interpreted distinction is a continuum, one
-   for each kind of evidence in §1.4.
+   for each kind of evidence in §1.4 (*neither pure*).
 7. `printf` shows that C is not purely compiled. Explain how, and derive the C
    calling convention from the fact that `printf` is variadic.
 8. What is a hierarchy of abstract machines? Locate the JVM in one.
@@ -426,5 +426,125 @@ Haskell in [ch.09](09-haskell-typeclasses.md) and
    be declared before use" belongs to.
 10. Java is statically typed yet needs runtime checks. Give two examples and the
     reason for each.
-11. Classify Rust, Python and JavaScript on the four axes of §1.9, and say why the
-    answers are idealisations.
+11. Classify Rust, Python and JavaScript on the four axes of §1.9 (*classifying a
+    language*), and say why the answers are idealisations.
+
+<details>
+<summary>Answers</summary>
+
+1. **Definition 1.1.** Given a language `L`, an **abstract machine** `M_L` is any
+   set of **data structures and algorithms** which can perform the **storage and
+   execution** of programs written in `L` [GM1 Def. 1.1]. Its two components are
+   the **store**, which holds data and programs, and the **interpreter**, which
+   executes the instructions contained in programs [GM1 §1.1].
+
+2. Definition 1.3 (**interpreter**): `I_L^Lo : (Prog_L × D) → D`, a partial
+   function, such that `I_L^Lo (P_L, Input) = P_L(Input)`. Definition 1.4
+   (**compiler**): `C_L,Lo : Prog_L → Prog_Lo`, such that if
+   `C_L,Lo (P_L) = Pc_Lo` then `P_L(Input) = Pc_Lo(Input)` for every
+   `Input ∈ D` [GM1 Defs. 1.3–1.4]. The difference is entirely in domain and
+   codomain: the interpreter's domain is `Prog_L × D` — it takes a **program and
+   its input together** — and its codomain is `D`, a **result**. The compiler's
+   domain is `Prog_L` alone — a **program**, with no data — and its codomain is
+   `Prog_Lo`, another **program**.
+
+3. The interpreter's function is partial because a program that does not
+   terminate has no result — `I_L^Lo(P_L, Input)` is simply undefined for such an
+   `Input`, since the interpreter's job is to actually run `P_L` on `Input`
+   [GM1 §1.2]. The compiler is total in the relevant sense because translation
+   (1.2) is a syntactic transformation, separate from execution (1.3): the
+   compiler produces `Pc_Lo` regardless of whether `P_L` would ever terminate on
+   any given input — it never runs the program, only rewrites it [GM1 §1.2.3].
+
+4. The listing (`P2`, the `R1`/`R2`/`goto` sequence) is **not code the
+   interpreter generates or emits**. It describes, in the reader's terms, the
+   sequence of primitive-data and sequence-control operations the interpreter
+   *performs internally* each time it decodes and executes the `for` loop `P1`
+   — i.e., what decoding `P1` amounts to, not an artifact produced by the
+   interpreter [GM1 §1.2.3].
+
+5. With no translation phase, the interpreter must decode `L`'s constructs
+   *while it executes*. Each of the `n` iterations of `P1`'s loop re-enters the
+   body, and on every entry the interpreter must again decode the command `C` —
+   work like recognising `C`'s construct and dispatching to the right
+   operations — because nothing from the previous iteration's decoding is
+   retained. A compiler instead performs that decoding **once**, at translation
+   time, producing something like the `P2` listing directly as target code; the
+   `n` executions then run already-decoded instructions, only the `goto L1`
+   loop overhead repeating, not the decoding of `C` itself [GM1 §1.2.3].
+
+6. (i) **Hybrid implementations**: Java compiles to bytecode which the JVM then
+   interprets — a compiler followed by an interpreter — and transpilers such as
+   TypeScript → JavaScript are compilers whose target is itself a high-level
+   language, not a "final" machine language [L1]. (ii) **Compiled languages
+   depend on a runtime**: compiling `printf("Hello, world!\n")` does not
+   translate `printf` — the compiler emits a `CALL` to an implementation
+   supplied by the C runtime library, linked separately, so even C executes
+   code its compiler never saw [L1]. (iii) **Interpreted languages compile**:
+   interpreters routinely preprocess source into an optimised intermediate form
+   before execution, e.g. CPython compiles to bytecode before the interpreter
+   runs it [L1].
+
+7. Compiling a call to `printf` does not translate `printf` itself; the
+   compiler emits code that prepares the arguments and issues a `CALL` to an
+   implementation supplied by the **C runtime library**, linked in separately
+   — so C, the canonical "fully compiled" language, still executes code its own
+   compiler never processed [L1]. Deriving the calling convention: `printf`
+   takes a **variable** number of arguments, so at the point of `CALL` the
+   callee has no way to know how many arguments the caller pushed onto the
+   stack. Only the **caller** knows that count, so only the caller can be
+   responsible for cleaning the stack afterward — which is exactly the C
+   convention (**caller cleans up**), and it is precisely why Pascal-style
+   conventions, where the callee cleans up, could never support a variadic
+   `printf` [L1].
+
+8. A **hierarchy of abstract machines** is the resolution of the
+   compiled/interpreted dichotomy [GM1 §1.3]: an abstract machine for `L` is
+   itself implemented on a machine for `Lo`, which may itself be abstract and
+   implemented on a further machine, and so on, until some level is realised in
+   hardware. Each level is a machine in the sense of Definition 1.1, with its
+   own machine language by Definition 1.2. In the Java stack — source →
+   bytecode → JVM → native instructions → microarchitecture — the **JVM**
+   occupies the level that is the *interpreter* for the bytecode machine
+   language: bytecode is compiled *to* by `javac`, but the JVM level then
+   interprets that bytecode, and is itself implemented on (compiled down to)
+   native instructions. This is why "is Java compiled or interpreted?" has no
+   single answer — compiled at one level, interpreted at the next.
+
+9. Morris's three levels are **grammar, semantics and pragmatics**
+   [GM2 §2.1]. "Variables must be declared before use" is **not** part of
+   grammar — a context-free grammar cannot express it — and the chapter states
+   explicitly that such contextual constraints "are part of a language's
+   definition but not of its grammar, and are enforced during semantic
+   analysis" — so it belongs to **semantics**.
+
+10. Two examples, both from §1.8. (i) **Downcasting**: casting a `Control` to a
+    `Button` is checked statically only up to what the declared types allow;
+    whether the actual object *is* a `Button` can only be known at runtime, so
+    Java inserts a runtime check — because static typing verifies against
+    declared types, not actual runtime identities. (ii) **Generics under type
+    erasure**: generic type parameters are erased at compile time
+    ([ch.08 §8.5](08-java-generics.md#type-erasure)), so the compile-time
+    generic check cannot be the whole story — some verification necessarily
+    happens at runtime, because the erased bytecode no longer carries the
+    type-parameter information the compiler used.
+
+11. | Language | Compiled/interpreted | Typing discipline | Strength | Type constructors |
+    |---|---|---|---|---|
+    | Rust | compiled | static | strong | yes |
+    | Python | interpreted | dynamic | weak | no traditional ones |
+    | JavaScript | interpreted | dynamic | — | limited, via objects |
+
+    These are **idealisations** because, per §1.4, pure compilation and pure
+    interpretation are both rare and the axes are themselves a continuum: Rust
+    needs no runtime and no GC ([ch.05 §5.1](05-rust-ownership-borrowing.md#51-what-rust-is-for))
+    but that is the extreme end, not proof no other language could be placed
+    there too; Python still compiles to bytecode before its interpreter runs it
+    ([ch.06 §6.5](06-python-runtime-gil.md#65-the-global-interpreter-lock)); and
+    JavaScript has a `class` keyword sitting on top of an object/dictionary
+    model with no genuine type constructors underneath, which is why its
+    "type constructors" cell reads "limited" rather than yes/no. As stated
+    directly: "these categories are idealizations, and most real languages
+    occupy hybrid positions along a spectrum" [L1].
+
+</details>

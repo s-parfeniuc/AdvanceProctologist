@@ -822,5 +822,112 @@ Each limitation traces back to erasure, and it is worth doing the trace:
 10. Given `List<? extends Fruit> fruits = apples;` where `apples` is a
     `List<Apple>`, explain why `fruits.add(new Apple())` is rejected and what is
     the only value that may be added.
-11. Pick three limitations from [Generics p.29] and derive each from type
-    erasure.
+11. Pick three limitations from [Generics p.29] (*limitations of Java generics*) and
+    derive each from type erasure.
+
+<details>
+<summary>Answers</summary>
+
+1. Without generics, `List.add(Object n)` accepts any object, so nothing stops
+   `list.add(new Integer(5))` on a list intended for `String`s — insertion is
+   unchecked. Extraction needs an explicit cast, `String s = (String)
+   list.get(0)`, which fails at runtime with a `ClassCastException` if the
+   stored object is not actually a `String`. Generics record the element type
+   in `E`, so `add(E n)` rejects the wrong type at the call and `get` returns
+   `E` with no cast — the failure (a runtime `ClassCastException`) moves to a
+   compile-time type error.
+2. `E extends Number` is a bound: it restricts instantiation of `E` to
+   `Number` and its subtypes, and in exchange licenses calling `Number`'s
+   methods (`intValue()`) on values of type `E` inside the body. An unbounded
+   `<E>` could be instantiated at *any* reference type, so a value of type `E`
+   is "like an `Object`" — only `Object`'s methods are available, and
+   `intValue()` is not one of them.
+3. `<T extends Comparable<T>>` reads "`T` is a type comparable to itself" —
+   the bound is recursive, `T` occurs inside its own bound, so `compareTo`
+   takes a `T`, which licenses `e.compareTo(elem)` where both `e` and `elem`
+   are `T`. `<T extends Comparable<?>>` only promises `T` is comparable to
+   *some* unknown type, not necessarily `T` itself; `compareTo`'s parameter is
+   then that unknown type, not `T`, so passing `elem:T` to it cannot be shown
+   to type-check.
+4. Java checks the generic definition once, against the bound, before any
+   instantiation: an error in the body (using an operation the bound doesn't
+   support) is reported at the *definition*; an error in a caller's type
+   argument (violating the bound) is reported at the *call site*. Errors never
+   surface from inside generic code itself. C++ checks a template *after*
+   substitution, once per instantiation: an unsupported operation surfaces as
+   a compile error *inside* the template's body, at each site that
+   instantiates it with a bad type — pointing into library internals rather
+   than the caller's own code.
+5. ```java
+   List<Integer> lisInt = new ArrayList<Integer>();
+   List<Number> lisNum = new ArrayList<Number>();
+   ```
+   Suppose `List<Integer> <: List<Number>`, so `lisNum = lisInt` were allowed:
+   then `lisNum.add(new Number(...))` type-checks on the declared type
+   `List<Number>`, but it inserts a bare `Number` into the object `lisInt`
+   still views as `List<Integer>`; a later `lisInt.get(0)` returns something
+   that is not an `Integer`. Unsound because of **`add`**. Suppose the
+   reverse, `List<Number> <: List<Integer>`, so `lisInt = lisNum` were
+   allowed: then `Integer n = lisInt.get(0)` type-checks on the declared type
+   `List<Integer>`, but the underlying list may hold any `Number`, so the
+   retrieved value need not be an `Integer`. Unsound because of **`get`**.
+6. A type parameter used only in output positions (methods that *produce* it,
+   like `get`) may vary covariantly; used only in input positions (methods
+   that *consume* it, like `add`) may vary contravariantly; used in both must
+   be invariant. `Function1[-T, +R]`'s only method is `apply(v1: T): R` — `T`
+   is consumed (input position), hence contravariant (`-T`); `R` is produced
+   (output position), hence covariant (`+R`). A function accepting any
+   `Animal` and returning a `Cat` can stand in wherever a function accepting
+   `Cat`s and returning `Animal`s is required.
+7. Historical reason: before generics there was no way to write a single
+   reusable `sort(Object[] o)` for arrays of arbitrary reference type —
+   without covariance a separate `sort` would be needed for each element type
+   — and `sort` only reads and permutes, never inserts a new object, so using
+   the array covariantly (read-only) is safe for that case. Runtime cost:
+   covariance was granted to *all* uses, not just read-only ones
+   (`fruits[0] = new Strawberry()` on an actual `Apple[]` compiles), so every
+   array store must carry a run-time check of the dynamic element type,
+   throwing `ArrayStoreException` on mismatch — a cost in both safety (a
+   compile-time error becomes a runtime exception) and speed (every store is
+   checked).
+8. Illegal because array covariance depends on a run-time element-type check,
+   and type erasure removes generic type information at run time, so the
+   check the JVM would need does not exist. If it were allowed:
+   ```java
+   List<String>[] lsa = new List<String>[10]; // hypothetically allowed
+   Object[] oa = lsa;                          // ok, array covariance
+   List<Integer> li = new ArrayList<Integer>();
+   li.add(new Integer(3));
+   oa[0] = li;      // should throw ArrayStoreException, but the JVM only sees
+                     // oa[0]:List = li:ArrayList — compatible, erasure hides <String> vs <Integer>
+   String s = lsa[0].get(0);  // type error: retrieves an Integer where a String
+                               // is declared, no cast to fail, no check to throw
+   ```
+9. `src` is only read from (a **producer**) → `? extends T` (Producer
+   Extends, covariant); `dst` is only written to (a **consumer**) → `? super
+   T` (Consumer Super, contravariant). Neither parameter is both read and
+   written, so plain `T` would be unnecessarily restrictive; the wildcards
+   make `copy` maximally general, e.g. accepting a `List<Object> dst` and a
+   `List<Integer> src` with `T = Number`.
+10. `fruits` is declared `List<? extends Fruit>`; the compiler only knows its
+    element type is *some* unknown subtype of `Fruit` — it does not know it is
+    actually `Apple`, it could equally be a `List<Strawberry>` as far as the
+    static type is concerned. Passing `new Apple()` to `add` cannot be proven
+    safe for every subtype the wildcard could denote, so it is rejected. The
+    only value that may be added is `null`, since `null` belongs to every
+    reference type.
+11. Three, each traced to erasure (all type parameters become `Object` or
+    their first bound after compilation, so generic type information does not
+    exist at run time): **Primitives** — `ArrayList<int> a = …` fails because
+    a type parameter erases to `Object`, and `int` is not an `Object`
+    (autoboxing to `ArrayList<Integer>` is the fix). **Casts/`instanceof`** —
+    `list instanceof ArrayList<Integer>` fails because the runtime has no
+    record of the type argument after erasure, so it cannot distinguish
+    `ArrayList<Integer>` from `ArrayList<String>`; `list instanceof
+    ArrayList<?>` is allowed because it only asks about the erased raw class.
+    **Overloading on erased-equal signatures** — `print(Set<String>)` and
+    `print(Set<Integer>)` both erase to `print(Set)`, so the two overloads
+    would collide at the one runtime signature, with no way left to tell them
+    apart.
+
+</details>

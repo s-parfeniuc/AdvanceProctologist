@@ -1164,9 +1164,10 @@ follows from `Eq a` by the list instance, and `Eq a` follows from `Ord a` becaus
 6. State what a `class` declaration, an `instance` declaration, and a `C a =>`
    constraint each compile to.
 7. `square :: Num n => n -> n` becomes `square :: Num n -> n -> n`. Explain the
-   significance of `=>` becoming `->` for the classification of Figure 9.1.
-8. Are type classes early or late bound? Cite the clause of [Haskell p.23] that
-   settles it.
+   significance of `=>` becoming `->` for the classification of Figure 9.1
+   (polymorphism in Haskell: which branch does the compiled form sit in?).
+8. Are type classes early or late bound? Cite the clause of [Haskell p.23]
+   (*implementation summary*) that settles it.
 9. Explain how the compiler obtains a dictionary for `Eq [[Int]]` given only
    `instance Eq Int` and `instance Eq a => Eq [a]`.
 10. Why does `read "Red"` require a type annotation while `show Red` does not?
@@ -1176,3 +1177,109 @@ follows from `Eq a` by the list instance, and `Eq a` follows from `Ord a` becaus
     step introduces polymorphism.
 13. *(appendix)* Simplify `(Ord a, Eq a, Eq [a])` to `Ord a`, naming the rule used
     at each step.
+
+<details>
+<summary>Answers</summary>
+
+1. `length` never inspects an element — it only counts cells — so `[w] -> Int`
+   holds for *every* `w`, no exceptions. `member` must compare elements with
+   `==`, which not every type supports, so `[w] -> w -> Bool` claims more
+   generality than the definition can deliver. The gap identifies the middle
+   class of functions between fully polymorphic and monomorphic: those that
+   work for *some* types only [Haskell p.6].
+
+2. `squares(x,y,z) = (square x, square y, square z)` has three independent
+   argument positions, each independently resolvable to the `Int` or the
+   `Float` version of `square` under take 1's scheme — 2×2×2 = 8 definitions
+   [Haskell p.7]. Type classes give it the qualified type
+   `(Num a, Num b, Num c) => (a,b,c) -> (a,b,c)`, which compiles to **one**
+   definition taking three dictionaries: `squares (da,db,dc) (x,y,z) =
+   (square da x, square db y, square dc z)`. The eight combinations still
+   exist, but as eight possible argument tuples at call sites, not as eight
+   bodies [Haskell p.24].
+
+3. (1) Equality applied to a function yields a **runtime error** — the type
+   checker cannot catch it because the type claims `==` works everywhere. (2)
+   Equality applied to an abstract type compares the **underlying
+   representation**, which violates abstraction principles — two values the
+   abstraction regards as equal can compare unequal [Haskell p.10].
+
+4. An eqtype variable, SML's `''a`, is a type variable restricted to types
+   that support equality — the restriction is checked statically, so
+   `member (\y->y*2) [...]` is rejected as a type error rather than failing at
+   runtime [Haskell p.11]. Its limitation is that it is hard-wired: only `==`
+   is privileged this way. Type classes generalize the idea to **arbitrary**
+   user-declared collections of overloaded operations, not just built-in
+   equality [Haskell p.12].
+
+5. ```haskell
+   parabola' (plus, times) x = plus (times x x) x
+   ```
+   The dictionary parameter `(plus, times)` buys a single definition of
+   `parabola'` that serves any type with addition and multiplication, with no
+   duplication: `y = parabola'(intPlus,intTimes) 10`, `z =
+   parabola'(floatPlus,floatTimes) 3.14` [Haskell p.14]. The requirement that
+   was implicit in `x * x + x` becomes an explicit value the caller supplies.
+
+6. `class` → a dictionary **type** declaration plus a **selector** function
+   for each operation. `instance` → a dictionary **value** of that type.
+   `C a => …` → an extra **dictionary parameter**, with `=>` becoming `->`
+   [Haskell pp.20–22].
+
+7. After translation `square :: Num n -> n -> n` has no overloading left at
+   all — it is an ordinary function of two arguments, universally
+   polymorphic in `n` and `Num n`. **Ad hoc polymorphism has been compiled
+   into universal (parametric) polymorphism plus a parameter** [Haskell
+   p.20]. So in Figure 9.1's tree, the compiled form sits entirely on the
+   **implicit parametric** branch: the ad hoc/overloading branch has been
+   eliminated by the translation, not merely hidden.
+
+8. **Early bound**. The settling clause of [Haskell p.23]: "The compiler
+   rewrites calls to overloaded functions to pass a dictionary. It uses the
+   **static, qualified type** of the function to select the dictionary." The
+   dictionary is fixed at compile time from the static type, not looked up by
+   inspecting a runtime value — like Java's overloading, unlike its
+   overriding.
+
+9. `dEqList :: Eq a -> Eq [a]` is a function from dictionary to dictionary
+   [Haskell p.27]. Given `dEqInt :: Eq Int` (from `instance Eq Int`), the
+   compiler first builds `Eq [Int]` as `dEqList dEqInt`, then applies
+   `dEqList` again to get `Eq [[Int]]` as `dEqList (dEqList dEqInt)` — no
+   declaration for `Eq [[Int]]` was ever written, it is computed like any
+   other value.
+
+10. `read :: Read a => String -> a` constrains the **result** type, but a
+    `String` argument carries no type information to dispatch on, so the
+    instance cannot be selected without knowing what type is expected —
+    hence `let c :: Color = read "Red"`. `show :: Show a => a -> String`
+    constrains the **argument** type, and a value like `Red` already has a
+    known type (`Color`), so the instance is resolved directly from the
+    argument [Haskell p.30].
+
+11. Type class errors have the shape "no instance for *constraint*":
+    inference succeeds in deriving a constraint, and no instance satisfies
+    it. `+` requires a `Num` instance for its operand types; there is no
+    `instance Num Char`, so the constraint `Num Char` cannot be discharged.
+    This is not a mismatch between two fixed types but a failed predicate —
+    exactly the compile-time counterpart of the runtime error that take 2's
+    fully polymorphic `==` would have produced [Haskell p.32].
+
+12. `f g = g 2` [Haskell pp.50–54]. **Step 1** parse: binary `@`-node for
+    `g 2` under a ternary `Fun`-node for the declaration. **Step 2** assign
+    type variables `t_0` (`f`), `t_1` (`g`), `t_3` (`2`), `t_4` (`g 2`).
+    **Step 3** constraints: `t_0 = t_1 -> t_4` (declaration rule), `t_1 = t_3
+    -> t_4` (application rule), `t_3 = Int` (literal). **Step 4** unify:
+    substituting `t_3 = Int` gives `t_1 = Int -> t_4`, then `t_0 = (Int ->
+    t_4) -> t_4`. **Step 5** read off: `f :: (Int -> t_4) -> t_4`.
+    Polymorphism is introduced at the final step: `t_4` never appears pinned
+    down by any constraint, so it is generalised — "unconstrained type
+    variables become polymorphic types" [Haskell p.54].
+
+13. `(Ord a, Eq a, Eq [a])` [Haskell p.64]. First, use the **instance
+    declaration** `instance Eq a => Eq [a]`: `(Eq a, Eq [a])` simplifies to
+    `Eq a`, leaving `(Ord a, Eq a)`. Then use the **class declaration**
+    `class Eq a => Ord a where …` (`Eq` is a superclass of `Ord`): `(Ord a,
+    Eq a)` simplifies to `Ord a`. Result: `example :: Ord a => a -> [a] ->
+    Bool`.
+
+</details>

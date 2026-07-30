@@ -786,14 +786,201 @@ examinable notation:
 3. Explain conditions 2.a and 2.b of the LL(1) definition, each with a grammar
    that violates only that condition.
 4. Why can a left-recursive grammar never be LL(*k*), for any `k`? Argue from the
-   procedure of Figure 2.7.
+   procedure of Figure 2.7 (ch.02: the generic recursive-descent procedure for a
+   nonterminal `A`).
 5. Eliminate left recursion from `S → A a | b`, `A → A c | S d | ε`. Which
    precondition of the general algorithm does this grammar violate, and what
    goes wrong?
 6. Left-factor the dangling-else grammar, then show that the resulting grammar
    still yields a duplicate entry in `M`. What does that prove about the
    grammar?
-7. In the driver of §3.8, why must `Y₁` end up on top of the stack? What would
-   the parser compute if the push order were reversed?
+7. In the table-driven driver of §3.8, why must `Y₁` end up on top of the stack?
+   What would the parser compute if the push order were reversed?
 8. Given `FOLLOW(T) = { + ) $ }`, which cells of row `T` get `synch` under panic
    mode, and what does the driver do when it reads one?
+
+<details>
+<summary>Answers</summary>
+
+1. This is exactly Figure 3.9's grammar. `FIRST`:
+
+       FIRST(E) = FIRST(T) = FIRST(F) = { ( , id }
+       FIRST(E_R) = { + , ε }
+       FIRST(T_R) = { * , ε }
+
+   `FOLLOW`:
+
+       FOLLOW(E) = FOLLOW(E_R) = { ) , $ }
+       FOLLOW(T) = FOLLOW(T_R) = { + , ) , $ }
+       FOLLOW(F) = { + , * , ) , $ }
+
+   Table `M` (built by indexing each production `A → α` under `FIRST(α)`, and
+   additionally under `FOLLOW(A)` when `ε ∈ FIRST(α)`):
+
+   |  | `id` | `+` | `*` | `(` | `)` | `$` |
+   |---|---|---|---|---|---|---|
+   | `E` | `E → T E_R` | | | `E → T E_R` | | |
+   | `E_R` | | `E_R → + T E_R` | | | `E_R → ε` | `E_R → ε` |
+   | `T` | `T → F T_R` | | | `T → F T_R` | | |
+   | `T_R` | | `T_R → ε` | `T_R → * F T_R` | | `T_R → ε` | `T_R → ε` |
+   | `F` | `F → id` | | | `F → ( E )` | | |
+
+   Every cell holds at most one production, so by the §3.8 note ("the grammar
+   is LL(1) **iff** `M[A,a]` contains at most one production for each `A ∈ N`
+   and `a ∈ T`") the grammar is LL(1).
+
+2. The algorithm [Parsing p.45]:
+
+       FOLLOW(A) =
+           for all (B → α A β) ∈ P do
+               add FIRST(β)\{ε} to FOLLOW(A)
+           for all (B → α A β) ∈ P and ε ∈ FIRST(β) do
+               add FOLLOW(B) to FOLLOW(A)
+           for all (B → α A) ∈ P do
+               add FOLLOW(B) to FOLLOW(A)
+           if A is the start symbol S then
+               add $ to FOLLOW(A)
+
+   Clauses 2 and 3 both add `FOLLOW(B)` **to** `FOLLOW(A)`, i.e. they define
+   `FOLLOW(A)` in terms of `FOLLOW(B)` for some other nonterminal `B`. Since
+   `B` can itself be defined in terms of `FOLLOW(A)` (or of some `C` that
+   eventually depends on `A`), the equations are mutually recursive across
+   nonterminals — there is no fixed order in which to compute them once and be
+   done, because computing one set early may still be missing contributions
+   that only become known once a later set is computed. The only sound
+   approach is to start every `FOLLOW` set empty (plus the `$` for `S`), apply
+   all three clauses repeatedly, and stop when a full pass adds nothing — a
+   fixed-point iteration.
+
+3. Condition 2.a: if some alternative `αᵢ ⇒* ε`, no other alternative `αⱼ`
+   may also derive `ε` — otherwise two productions would both match on an
+   empty input and the parser could not choose. Violating *only* 2.a: row 3 of
+   the §3.4 table, `S → a R | ε`, `R → S | ε`. For `R`, both alternatives
+   (`S` and the literal `ε`) derive `ε` (`S ⇒* ε` via `S → ε`), so 2.a fails;
+   condition 1 is not at issue here since the chapter attributes this row's
+   failure to 2.a specifically.
+
+   Condition 2.b: if `αᵢ ⇒* ε`, no other alternative `αⱼ` may start with a
+   token in `FOLLOW(A)` — otherwise, on seeing such a token, the parser cannot
+   tell "take `αⱼ`" from "take the empty `αᵢ` and let the caller consume the
+   token". Violating *only* 2.b: row 4 of the same table, `S → a R a`,
+   `R → S | ε`. For `R`: `FIRST(S) ∩ FOLLOW(R) ≠ ∅` (both contain `a`), so
+   seeing `a` after an `R` is ambiguous between expanding `R → S` and taking
+   `R → ε`.
+
+4. Figure 2.7 ([ch.02 §-, p.25](02-syntax-and-grammars.md)) is:
+
+       void A() {
+           Choose an A-production, A → X₁ X₂ ⋯ X_k;
+           for ( i = 1 to k ) {
+               if ( X_i is a nonterminal )
+                   call procedure X_i();
+               else if ( X_i equals the current input symbol a )
+                   advance the input to the next symbol;
+               else /* an error has occurred */;
+           }
+       }
+
+   If `A` is left-recursive, `A ⇒⁺ A η` for some `η`, so some `A`-production
+   has `X₁ = A` (immediately, or after other left-recursive productions
+   reduce to that case). When `A()` chooses that production, the very first
+   step of the loop (`i = 1`) finds `X₁` is the nonterminal `A` and calls
+   `A()` again — **before** any `X_i` has advanced the input, since input is
+   only advanced by the terminal-matching branch and no terminal has been
+   seen yet. The recursive call starts from the identical input position with
+   the identical lookahead available to it, so it faces exactly the same
+   choice and can again pick `A → A η`, and so on. No lookahead of any fixed
+   length `k` can break this, because the input position — and hence
+   everything the lookahead could examine — never moves between one call and
+   the next; the loop is infinite regardless of how much lookahead the choice
+   is allowed to use.
+
+5. `S → A a | b`, `A → A c | S d | ε` is indirectly left-recursive:
+   `A ⇒ S d ⇒ A a d`, i.e. `A ⇒⁺ A η` with `η = a d`. Take the nonterminal
+   order `A₁ = S`, `A₂ = A` (as listed).
+
+   `i = 1` (`S`): no `j < 1`; `S → A a | b` has no immediate left recursion
+   (neither alternative starts with `S`). Unchanged.
+
+   `i = 2` (`A`): `j = 1`, substitute `S`'s alternatives into the production
+   `A → S d`:
+
+       A → A c | A a d | b d | ε
+
+   Eliminate the now-immediate left recursion (recursive alternatives `c`,
+   `a d`; non-recursive `b d`, `ε`):
+
+       A   → b d A_R | A_R
+       A_R → c A_R | a d A_R | ε
+
+   Final grammar:
+
+       S   → A a | b
+       A   → b d A_R | A_R
+       A_R → c A_R | a d A_R | ε
+
+   This grammar has `A → ε`, an **ε-production**, which is exactly the
+   precondition the general algorithm rules out ("Grammar `G` with no cycles
+   or ε-productions", [Parsing p.41]). What goes wrong: since `A_R` can
+   vanish (`ε ∈ FIRST(A_R)`) and `A → A_R` is now a bare alternative,
+   `ε ∈ FIRST(A)`, so `FIRST(A a) = (FIRST(A)\{ε}) ∪ {a} ⊇ {a, b, c}` — it
+   picks up `b` because `A` itself can start with `b` (via `A → b d A_R`).
+   That collides with `S`'s other alternative, `FIRST(b) = {b}`:
+   `FIRST(A a) ∩ FIRST(b) ∋ b`, violating condition 1 of the LL(1) definition
+   (§3.4). The elimination produced a grammar that is *still* not LL(1) — the
+   ε-production let a left-recursion elimination step manufacture a fresh
+   FIRST/FIRST clash that wasn't visible in the original grammar.
+
+6. The dangling-else grammar of §3.5 is `stmt ::= if expr then stmt else stmt
+   | if expr then stmt`, common prefix `if expr then stmt`. Left-factoring
+   per the §3.5 rule (`A → αβ₁ | … | αβₙ | γ` ⟶ `A → αA_R | γ`,
+   `A_R → β₁ | … | βₙ`) gives exactly the grammar already used in §3.8
+   (with `i`=`if`, `t`=`then`, `e`=`else`, `a` an atomic stmt, `b` a boolean
+   expr):
+
+       S   → i E t S S_R | a
+       S_R → e S | ε
+       E   → b
+
+   Building `M` for this grammar reproduces Figure 3.11's collision:
+   `FOLLOW(S_R) = { e, $ }` and `FIRST(e S) = { e }`, so both `S_R → ε`
+   (added via `FOLLOW`) and `S_R → e S` (added via `FIRST`) land in
+   `M[S_R, e]` — a duplicate entry, not LL(1). This proves left factoring
+   removed only the *symptom* (a shared FIRST prefix across alternatives of
+   `stmt`), not the underlying **ambiguity**: since every LL(1) grammar's
+   table is collision-free (§3.8), a collision after left-factoring means the
+   grammar is still ambiguous, and — as the chapter states — no amount of
+   left-factoring can make an ambiguous grammar LL(1).
+
+7. The driver processes symbols by **popping** the stack, and popping removes
+   whatever was pushed **last**. Input is scanned left to right, so the
+   symbol that must be matched/expanded next is `Y₁`, the leftmost symbol of
+   the production's right-hand side; for `Y₁` to be popped first it must be
+   pushed last, landing on top (`push(Y_k, …, Y₁)`). This is what keeps the
+   stack's top always aligned with the next unread input token and makes the
+   sequence of productions applied a **leftmost derivation** — the first `L`
+   in LL(1).
+
+   If the push order were reversed (`Y₁` pushed first, `Y_k` on top), the
+   driver would pop `Y_k` — the *rightmost* symbol of the production — and try
+   to match or expand it against the current (leftmost) input token. For any
+   production with more than one right-hand-side symbol this puts the wrong
+   symbol on top of the stack relative to the input actually being scanned:
+   terminals would be matched out of order and nonterminals expanded before
+   the symbols that are supposed to precede them, so the driver would
+   generally hit `error()` (a terminal mismatch) rather than compute any
+   valid derivation — and on the rare input where symbols happened to match
+   anyway, the sequence of productions read off would not correspond to any
+   consistent (leftmost or rightmost) derivation of the input.
+
+8. Row `T` has explicit entries only at columns `id` and `(` (from
+   `T → F T_R`, `FIRST = { ( , id }`); the remaining columns `+`, `*`, `)`,
+   `$` are undefined. Panic mode fills an undefined `M[A, a]` with `synch`
+   whenever `a ∈ FOLLOW(A)`. With `FOLLOW(T) = { + , ) , $ }`, the cells
+   `M[T, +]`, `M[T, )]`, `M[T, $]` all get `synch`; `M[T, *]` is not in
+   `FOLLOW(T)`, so it stays a plain `error`. On reading a `synch` entry the
+   driver pops the current nonterminal `T` — treating it as if it had matched
+   the empty string and resuming without it — and skips input until it finds
+   either the synchronizing token or a token in `FIRST(T)`.
+
+</details>

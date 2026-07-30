@@ -1346,3 +1346,83 @@ anywhere, and a sequence needs no brackets.
 14. Desugar `do { c <- getChar; putChar c; return () }` completely.
 15. Explain how `unsafePerformIO` lets one write `cast :: a1 -> a2`, and what
     proof obligation its use carries.
+
+<details>
+<summary>Answers</summary>
+
+1. `&&` is Haskell's user-defined short-circuiting "or"-style operator (`False || x = x` pattern, mirrored for `&&`): when `x != 0` is false it never evaluates `y/x > 5`, so division by zero is avoided. `&` always evaluates both operands, so `y/x` is computed even when `x == 0`. `choose(x!=0, y/x>5)` cannot be fixed by writing `choose`'s body with `&&`, because C is call-by-value: arguments are evaluated **before** the call, so `y/x` is computed while building the argument list, regardless of what `choose`'s body does with them. Laziness at the operator level (`&&`) does not lift to user-defined functions in a strict language.
+
+2. With `Ω = (λx.x x)`, `ΩΩ = (λx.x x)(λx.x x) → x x[(λx.x x)/x] → (λx.x x)(λx.x x) = ΩΩ → …`, non-terminating. Under **applicative order**, `(λx. 0) (ΩΩ)` first evaluates the argument `ΩΩ`, which never terminates, so the whole expression diverges. Under **normal order**, the function is evaluated first and `ΩΩ` is substituted into the body `0` unevaluated; since `0` does not use `x`, the divergent argument is never touched and the result is `0` immediately. This illustrates the second Church–Rosser property: **if some evaluation order terminates, normal order evaluation terminates** — normal order is the most-terminating strategy.
+
+3. **Call by need = normal order + memoization.** Normal order contributes termination: arguments are only evaluated if and when needed, so unneeded (even infinite or divergent) arguments are never forced — e.g. `cond True [] [1..] => []`. Memoization contributes efficiency: once a delayed expression is forced, its value is cached and reused, so it is evaluated **at most once** — this avoids the duplicated work normal order alone causes (the `(+ 3 2)` example computed twice under plain normal order), recovering applicative order's efficiency without its strictness.
+
+4. Haskell binds names to **unevaluated expressions** (lazy binding), and definitions are recursive by default: `a = a + 1` binds `a` to the thunk `a + 1` in which the `a` on the right refers to this very binding. Forcing `a` requires evaluating `a + 1`, which requires evaluating `a` again, looping forever (`^CInterrupted`). OCaml is eager: `let a = a + 1` evaluates the right-hand side immediately, using the **old** value of `a` (6), so the new `a` is bound to `7` at binding time.
+
+5. A type class (`Eq a`) is a predicate over **types**: `a` stands for a type on its own. A constructor class (`Functor g`) is a predicate over **type constructors**: `g` only ever appears applied to another type, as `g a`, so `g` is a function from types to types. `[]` is not itself a type (`[Int]` is), so it cannot instantiate `a` in `class Eq a`, but it has exactly the right shape — `[] a = [a]` — to instantiate `g` in `class Functor g where fmap :: (a -> b) -> g a -> g b`.
+
+6. `fmap :: (a -> b) -> g a -> g b` expects a plain `a -> b`. Given `f :: a -> g b` and a value of type `g a`, applying `fmap f` yields `g (g b)` — a "box in a box" rather than `g b`. `fmap` cannot flatten this. `bind` (`>>=`) is the operation built for exactly this case: `(>>=) :: m a -> (a -> m b) -> m b` composes box-producing functions directly into a single-level box (for lists, this is literally `map` followed by `concat`).
+
+7. Nested `case`s:
+   ```haskell
+   bothGrandfathers p =
+       case father p of
+           Nothing -> Nothing
+           Just dad ->
+               case father dad of
+                   Nothing -> Nothing
+                   Just gf1 ->
+                       case mother p of
+                           Nothing -> Nothing
+                           Just mom ->
+                               case father mom of
+                                   Nothing -> Nothing
+                                   Just gf2 -> Just (gf1, gf2)
+   ```
+   As `>>=`:
+   ```haskell
+   bothGrandfathers p =
+          father p >>=
+              (\dad -> father dad >>=
+                  (\gf1 -> mother p >>=
+                       (\mom -> father mom >>=
+                           (\gf2 -> return (gf1,gf2) ))))
+   ```
+   As `do`:
+   ```haskell
+   bothGrandfathers p = do
+          dad <- father p
+          gf1 <- father dad
+          mom <- mother p
+          gf2 <- father mom
+          return (gf1, gf2)
+   ```
+   The `Nothing -> Nothing` lines disappear because each `>>=` (via `Maybe`'s `Monad` instance) already performs that propagation internally: `y >>= g = case y of { Nothing -> Nothing; Just x -> g x }`. What remains visible is only the interesting line, `return (gf1, gf2)`.
+
+8. ```haskell
+   (>>=) :: [a] -> (a -> [b]) -> [b]
+   xs >>= f = concat (map f xs)
+   ```
+   `map f xs :: [[b]]` applies the box-producing function `f` to every element, giving a list of lists (the doubled box of Q6). `concat :: [[a]] -> [a]` flattens it back to a single level. So under the **container reading**, `>>=` is "map, then flatten": apply the function inside the container to get a container of containers, then collapse one level of nesting — with `return x = [x]` as the smallest possible container holding `x`.
+
+9. `return :: a -> m a` is the trivial computation that "does nothing" and just produces its value. `x >> y :: m a -> m b -> m b` runs `x`, throws away its result, then runs `y`, returning `y`'s result — sequencing with no data dependency. `x >>= f :: m a -> (a -> m b) -> m b` runs `x`, applies `f` to its result, and runs the resulting computation — sequencing **with** a data dependency, since the second computation is chosen using the first's result. `>>` is defined from `>>=` by discarding the value: `x >> y = x >>= (\_ -> y)`.
+
+10. (a) `res = putchar 'x' + putchar 'y'` — the output ("xy" or "yx") depends on which operand `(+)` evaluates first, and evaluation order is undefined in a lazy language. (b) `ls = [putchar 'x', putchar 'y']` — whether anything prints at all depends on how the list is consumed; if only `length ls` is used, nothing is printed, since `length` never evaluates the list's elements. `type IO t = World -> (t, World)` resolves both: an `IO t` value is not an effect, only a **description** of one — a function waiting for a `World`. Merely evaluating `putchar 'x'` or building the list `ls` never applies that function to a `World`, so nothing happens either way — case (b)'s ambiguity vanishes because inspecting/discarding the list is harmless. Case (a) is resolved because effects are combined only through `>>=`'s explicit world-threading (`\w -> case m w of (r,w') -> k r w'`), which fixes a definite order (first `m`, then `k` with `w'`) — `(+)` on two actions isn't even how actions are meant to be composed; composing them via `>>=`/`>>` pins down the order unambiguously.
+
+11. **Evaluating** an action means forcing the lazy value `IO t` itself — e.g. reducing `putChar 'x'` to WHNF, or constructing `[putchar 'x', putchar 'y']`. Since `IO t = World -> (t, World)`, evaluating just produces this function value; it never applies it to a `World`, so it has no effect. **Performing** an action means applying it to an actual `World` token, which only ultimately happens through the `>>=`-chain rooted at `Main.main`. Because laziness only controls *when values are evaluated*, and evaluation never touches the world, no matter how unpredictably the runtime evaluates, duplicates, or discards an action value, no side effect occurs — purity of ordinary Haskell evaluation is preserved; only the single, deliberate, sequential act of performing (via `main`) has any effect.
+
+12. `(>>=) m k = \w -> case m w of (r,w') -> k r w'`. Each `World` is consumed exactly once: `m` is applied to the incoming `w` and produces a **new** world `w'`; only `w'` (never `w` again) is passed on to `k`. `k` cannot run without first extracting `w'` from `m`'s result — a strict data dependency — so there is a unique linear chain of world tokens through the whole computation, i.e. single-threading, not multiple independent or reorderable worlds.
+
+13. Looking at the IO interface's signatures (`getChar`, `putChar`, `openFile`, `newIORef`, …): every operation **returns** an `IO` action as its result, but only `(>>=)` **takes** an action as an argument. Since bind is the *only* operation that combines two actions, and bind's semantics is "run the first, then run the second (possibly using the first's result)", the sole way to build a bigger action out of smaller ones is this ordered composition — there is no other combinator, and (§10.7) no function `IO a -> a` to escape the monad and recombine actions some other way. Sequentiality is therefore forced by the shape of the interface alone, not by an extra rule.
+
+14. Using `do {v<-x; stmts} = x >>= \v -> do {stmts}`, `do {x; stmts} = x >> do {stmts}`, `do {x} = x`:
+    ```haskell
+    do { c <- getChar; putChar c; return () }
+    = getChar >>= \c -> do { putChar c; return () }
+    = getChar >>= \c -> (putChar c >> do { return () })
+    = getChar >>= \c -> (putChar c >> return ())
+    ```
+    Final form: `getChar >>= \c -> putChar c >> return ()`.
+
+15. `r = unsafePerformIO (newIORef (error "urk"))` escapes the `IO` monad by discarding the resulting `World` (Figure 10.13), so `r :: IORef a` keeps a fully generic type variable `a`, never pinned down by a checked context. `cast x = unsafePerformIO (do { writeIORef r x; readIORef r })` writes an `x` of whatever type it is called at into that generic cell and reads it back at whatever type the call site expects, giving `cast :: a1 -> a2` — e.g. `cast 65 :: Char` returns `'A'`. This is possible only because `unsafePerformIO :: IO a -> a` breaks the one-way door of §10.7 (no such function exists in pure Haskell) and severs the world-dependency that would otherwise fix `r`'s type and ordering. Its use carries a **proof obligation**: a promise to the compiler that the timing of this action relative to all other operations does not matter — a promise this construction deliberately violates, which is exactly how it breaks the soundness of the type system.
+
+</details>
